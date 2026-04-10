@@ -91,6 +91,28 @@ paths, symlink into `sites-enabled`, and `systemctl reload nginx`. The
 only thing that ever touches the public internet is your VPS nginx on
 `:443`.
 
+### Host resource footprint (for coexisting with other VPS apps)
+
+CloserAI is pinned to a unique docker subnet and uses predictable
+names so you can audit it against other compose projects on the same
+VPS without guessing.
+
+| Resource | Value |
+|---|---|
+| Host port (single) | `${PROXY_BIND:-127.0.0.1}:${PROXY_PORT:-14000}` → proxy container |
+| Docker network | `closerai-net` (bridge, subnet `10.89.0.0/16`) |
+| Docker volumes | `closerai_pgdata`, `closerai_redis-data` |
+| Container names | `closerai-{postgres,redis,server,worker,client,proxy}` |
+| Compose project | `closerai` |
+
+Internal ports (5432 postgres, 6379 redis, 4000 server, 3000 client)
+live on `closerai-net` only and **do not bind to the host** — they
+cannot conflict with anything else on your VPS.
+
+If you have other docker projects running on the same VPS, they won't
+collide with CloserAI as long as they don't also use host port 14000,
+network name `closerai-net`, or subnet `10.89.0.0/16`.
+
 ## Anthropic API key management
 
 Anthropic credentials are **per-organization** and are configured entirely in-app

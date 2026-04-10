@@ -1,3 +1,31 @@
+# =====================================================================
+# CloserAI compose project — VPS resource footprint
+# =====================================================================
+# Pin the project name so `docker compose down` from any directory name
+# still targets this stack, and so network/volume/container names are
+# predictable (and predictable means you can audit them against other
+# apps on the same VPS without guessing).
+name: closerai
+
+# ---------------------------------------------------------------------
+# Host resources this stack claims (verify no collisions with your
+# other compose projects on the same VPS):
+#
+#   Host port:     ${PROXY_BIND:-127.0.0.1}:${PROXY_PORT:-14000}  (proxy only)
+#   Docker net:    closerai-net  (subnet 10.89.0.0/16)
+#   Volumes:       closerai_pgdata, closerai_redis-data
+#   Containers:    closerai-postgres, closerai-redis, closerai-server,
+#                  closerai-worker, closerai-client, closerai-proxy
+#
+# Internal docker-network ports (NOT bound to the host — these live
+# only on closerai-net and cannot conflict with other apps on the
+# host): 5432 postgres, 6379 redis, 4000 server/worker, 3000 client.
+#
+# Deliberately AVOIDED host ports on this VPS:
+#   5000, 5433, 8081, 13000, 13002, 15000, 18000
+# (ContractShield / Proposal Manager / other projects)
+# ---------------------------------------------------------------------
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -20,7 +48,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - closerai
+      - closerai-net
 
   redis:
     image: redis:7-alpine
@@ -36,7 +64,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - closerai
+      - closerai-net
 
   server:
     build:
@@ -56,7 +84,7 @@ services:
     expose:
       - "4000"
     networks:
-      - closerai
+      - closerai-net
 
   worker:
     build:
@@ -75,7 +103,7 @@ services:
       REDIS_URL: redis://redis:6379
     command: ["node", "dist/jobs/worker.js"]
     networks:
-      - closerai
+      - closerai-net
 
   client:
     build:
@@ -89,7 +117,7 @@ services:
     expose:
       - "3000"
     networks:
-      - closerai
+      - closerai-net
 
   # -----------------------------------------------------------------------
   # Internal reverse proxy. This is the ONLY service with a host port
@@ -113,12 +141,25 @@ services:
     ports:
       - "${PROXY_BIND:-127.0.0.1}:${PROXY_PORT:-14000}:80"
     networks:
-      - closerai
+      - closerai-net
 
+# Explicit network definition with a pinned subnet. Docker's default
+# bridge auto-allocates from 172.17.0.0/16 onwards, which on a shared
+# VPS can collide with other compose projects and cause "failed to set
+# up container networking" or "pool overlaps" errors. Pinning an
+# unusual range (10.89.0.0/16) keeps us out of everyone else's way.
 networks:
-  closerai:
+  closerai-net:
+    name: closerai-net
     driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.89.0.0/16
+          gateway: 10.89.0.1
 
 volumes:
   pgdata:
+    name: closerai_pgdata
   redis-data:
+    name: closerai_redis-data
