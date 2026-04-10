@@ -18,7 +18,9 @@ const envSchema = z.object({
     .min(32)
     .default('dev-encryption-key-32-bytes-long!!'),
 
-  ANTHROPIC_API_KEY: z.string().default(''),
+  // Anthropic API keys live per-organization in the database (encrypted)
+  // and are managed via Settings → Integrations in the UI. The env file
+  // only holds the platform-wide default model identifiers.
   ANTHROPIC_MODEL: z.string().default('claude-opus-4-6'),
   ANTHROPIC_FAST_MODEL: z.string().default('claude-haiku-4-5-20251001'),
 

@@ -72,5 +72,9 @@ Return JSON with:
 - updatedProbability (0-100)
 - reasoning (1-2 sentence explanation)`;
 
-  return claudeJson<DealHealthAnalysis>(prompt, { maxTokens: 1024, temperature: 0.3 });
+  return claudeJson<DealHealthAnalysis>(prompt, {
+    organizationId,
+    maxTokens: 1024,
+    temperature: 0.3,
+  });
 }

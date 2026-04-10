@@ -112,7 +112,7 @@ messagesRouter.post('/analyze-reply', validateBody(analyzeSchema), async (req, r
       )
       .limit(1);
     if (!msg) throw new NotFoundError('Message');
-    const analysis = await analyzeReply(msg.bodyText);
+    const analysis = await analyzeReply(msg.bodyText, req.auth!.organizationId);
 
     await db
       .update(messages)

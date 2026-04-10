@@ -21,8 +21,13 @@ export interface ReplyAnalysis {
 
 /**
  * Classifies an inbound reply and recommends the next move.
+ * If the org has no Anthropic key configured, falls back to deterministic
+ * keyword heuristics so the worker doesn't stall.
  */
-export async function analyzeReply(replyText: string): Promise<ReplyAnalysis> {
+export async function analyzeReply(
+  replyText: string,
+  organizationId: string,
+): Promise<ReplyAnalysis> {
   const prompt = `Analyze the following inbound sales reply and classify it.
 
 Reply:
@@ -38,7 +43,12 @@ Return JSON with:
 - recommendedNextStep: one of "auto_reply", "escalate_to_closer", "handoff_to_human", "drop"`;
 
   try {
-    return await claudeJson<ReplyAnalysis>(prompt, { maxTokens: 512, temperature: 0.2, fast: true });
+    return await claudeJson<ReplyAnalysis>(prompt, {
+      organizationId,
+      maxTokens: 512,
+      temperature: 0.2,
+      fast: true,
+    });
   } catch {
     // Fallback heuristic if Claude unavailable / fails to return JSON
     const lower = replyText.toLowerCase();

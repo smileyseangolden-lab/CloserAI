@@ -3,6 +3,7 @@ import { Users, Megaphone, Target, Mail } from 'lucide-react';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
 import { StatCard } from '../components/ui/StatCard';
+import { AnthropicKeyBanner } from '../components/AnthropicKeyBanner';
 
 interface DashboardData {
   leads: { total: number; newCount: number; warmCount: number; hotCount: number; qualifiedCount: number; convertedCount: number };
@@ -27,6 +28,8 @@ export function DashboardPage() {
         title="Dashboard"
         subtitle="Overview of your pipeline, campaigns, and outreach."
       />
+
+      <AnthropicKeyBanner />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard

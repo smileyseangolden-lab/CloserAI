@@ -120,6 +120,7 @@ export async function generateMessageDraft(input: MessageDraftInput): Promise<Me
   });
 
   const { text, inputTokens, outputTokens, model } = await claude(userPrompt, {
+    organizationId: input.organizationId,
     system: systemPrompt,
     maxTokens: 1024,
     temperature: 0.7,
@@ -153,7 +154,11 @@ export async function generateTestMessage(input: {
 Write a sample outbound email in your voice for this scenario. Include a subject line.`;
 
   const systemPrompt = buildSystemPrompt({ agent });
-  const { text } = await claude(prompt, { system: systemPrompt, maxTokens: 800 });
+  const { text } = await claude(prompt, {
+    organizationId: input.organizationId,
+    system: systemPrompt,
+    maxTokens: 800,
+  });
   return parseSubjectAndBody(text);
 }
 

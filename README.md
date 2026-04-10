@@ -28,7 +28,8 @@ CloserAI is a full-stack SaaS platform that automates the entire B2B sales lifec
 ## Quick start
 
 ```bash
-# 1. Copy environment file and fill in Anthropic key
+# 1. Copy environment file. You do NOT need to supply an Anthropic key here
+#    anymore — it's managed in-app per organization.
 cp .env.example .env
 
 # 2. Boot the whole stack
@@ -40,9 +41,32 @@ docker compose exec server npm run db:seed
 
 # 4. Open the app
 open http://localhost:3000
+
+# 5. Sign in with demo@closerai.local / demopassword, then go to
+#    Settings → Integrations to paste in your Anthropic API key. Changes
+#    take effect immediately — no restart required.
 ```
 
 The default seeded login is `demo@closerai.local` / `demopassword`.
+
+## Anthropic API key management
+
+Anthropic credentials are **per-organization** and are configured entirely in-app
+from Settings → Integrations:
+
+- **Owner-only** — only users with the `owner` role can set, rotate, or remove
+  the key
+- **Encrypted at rest** with AES-256-GCM using `ENCRYPTION_KEY` from `.env`
+- **Never returned** to the client — the UI only shows the first 11 characters
+  as a non-secret identifier
+- **Test before save** — the UI can ping Claude with a 1-token request to
+  verify a candidate key works before persisting it
+- **Instant rotation** — a 60-second in-memory cache is invalidated on write,
+  so a rotated key takes effect on the next AI request with no server restart
+
+This means the typical incident response flow ("we leaked a key" / "we switched
+billing accounts") is: sign in → Settings → Integrations → paste new key →
+Save. No `.env` edits, no redeploys, no downtime.
 
 ## Phase map
 

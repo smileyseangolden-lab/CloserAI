@@ -37,7 +37,10 @@ async function fetchWebsiteContent(url: string): Promise<string> {
   }
 }
 
-export async function analyzeBusiness(websiteUrl: string): Promise<BusinessAnalysis> {
+export async function analyzeBusiness(
+  websiteUrl: string,
+  organizationId: string,
+): Promise<BusinessAnalysis> {
   const content = await fetchWebsiteContent(websiteUrl);
 
   const prompt = `You are a B2B sales strategist. Analyze the following website content and produce a structured business analysis.
@@ -54,5 +57,9 @@ Return JSON with these keys:
 - painPointsSolved (array of 3-5 pain points this product addresses)
 - suggestedIcps (array of 2-3 ideal customer profiles, each with: name, description, targetJobTitles (array), targetIndustries (array), targetCompanySizes (array from "1-10","11-50","51-200","201-500","501-1000","1001-5000","5000+"))`;
 
-  return claudeJson<BusinessAnalysis>(prompt, { maxTokens: 2048, temperature: 0.4 });
+  return claudeJson<BusinessAnalysis>(prompt, {
+    organizationId,
+    maxTokens: 2048,
+    temperature: 0.4,
+  });
 }

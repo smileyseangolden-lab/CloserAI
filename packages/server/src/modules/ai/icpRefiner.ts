@@ -48,7 +48,11 @@ ${recentLeads.map((l) => `- ${l.companyName} (${l.companyIndustry}, ${l.companyS
 
 Suggest specific, actionable refinements to this ICP to improve lead quality. Focus on 3-5 concrete changes. Keep response under 250 words.`;
 
-  const { text } = await claude(prompt, { maxTokens: 1024, temperature: 0.5 });
+  const { text } = await claude(prompt, {
+    organizationId,
+    maxTokens: 1024,
+    temperature: 0.5,
+  });
 
   await db
     .update(idealCustomerProfiles)

@@ -10,7 +10,7 @@ export async function processReplyJob(job: Job<{ messageId: string }>) {
   const [msg] = await db.select().from(messages).where(eq(messages.id, messageId)).limit(1);
   if (!msg || msg.direction !== 'inbound') return;
 
-  const analysis = await analyzeReply(msg.bodyText);
+  const analysis = await analyzeReply(msg.bodyText, msg.organizationId);
   logger.info({ messageId, intent: analysis.intent }, 'Reply analyzed');
 
   await db

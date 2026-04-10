@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from 'react-router';
 import { PageHeader } from '../components/ui/PageHeader';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import { IntegrationsSettings } from './settings/IntegrationsSettings';
 
 export function SettingsPage() {
   return (
@@ -16,6 +17,7 @@ export function SettingsPage() {
             { to: '/settings/icps', label: 'ICPs' },
             { to: '/settings/team', label: 'Team' },
             { to: '/settings/email', label: 'Email' },
+            { to: '/settings/integrations', label: 'Integrations' },
           ].map((item) => (
             <NavLink
               key={item.to}
@@ -39,6 +41,7 @@ export function SettingsPage() {
             <Route path="icps" element={<IcpsSettings />} />
             <Route path="team" element={<TeamSettings />} />
             <Route path="email" element={<EmailSettings />} />
+            <Route path="integrations" element={<IntegrationsSettings />} />
           </Routes>
         </div>
       </div>

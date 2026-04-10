@@ -72,7 +72,7 @@ const analyzeSchema = z.object({
 
 profilesRouter.post('/analyze', validateBody(analyzeSchema), async (req, res, next) => {
   try {
-    const analysis = await analyzeBusiness(req.body.websiteUrl);
+    const analysis = await analyzeBusiness(req.body.websiteUrl, req.auth!.organizationId);
     res.json(analysis);
   } catch (err) {
     next(err);

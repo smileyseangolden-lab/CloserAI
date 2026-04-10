@@ -1,12 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
-
-export const anthropic = new Anthropic({
-  apiKey: env.ANTHROPIC_API_KEY || 'missing-key',
-});
+import { AppError } from '../../utils/errors.js';
+import { getAnthropicKeyForOrg } from './anthropicKeyService.js';
 
 export interface ClaudeCallOptions {
+  organizationId: string;
   system?: string;
   maxTokens?: number;
   temperature?: number;
@@ -14,27 +13,52 @@ export interface ClaudeCallOptions {
 }
 
 /**
+ * We intentionally do NOT maintain a singleton Anthropic client anymore.
+ * Every call resolves the key for the requesting organization, so rotating
+ * a key in the UI takes effect on the very next AI request — no restart,
+ * no hot reload, no env editing.
+ */
+async function getClientForOrg(organizationId: string): Promise<Anthropic | null> {
+  const key = await getAnthropicKeyForOrg(organizationId);
+  if (!key) return null;
+  return new Anthropic({ apiKey: key });
+}
+
+/**
  * Single-turn Claude call that returns plain text.
- * If ANTHROPIC_API_KEY is missing (local dev with no key) this returns
- * a deterministic fake so tests and dev flows still work.
+ *
+ * If the org has no Anthropic key configured yet, this returns a clearly
+ * labeled stub response so dev flows still work. Production callers should
+ * check `isStub` in the returned object if they need to gate behavior.
  */
 export async function claude(
   prompt: string,
-  options: ClaudeCallOptions = {},
-): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string }> {
+  options: ClaudeCallOptions,
+): Promise<{
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
+  model: string;
+  isStub: boolean;
+}> {
   const model = options.fast ? env.ANTHROPIC_FAST_MODEL : env.ANTHROPIC_MODEL;
+  const client = await getClientForOrg(options.organizationId);
 
-  if (!env.ANTHROPIC_API_KEY) {
-    logger.warn('ANTHROPIC_API_KEY missing — returning stub AI response');
+  if (!client) {
+    logger.warn(
+      { organizationId: options.organizationId },
+      'No Anthropic API key configured for org — returning stub response',
+    );
     return {
       text: `[stub-ai-response] (model=${model}) ${prompt.slice(0, 120)}...`,
       inputTokens: 0,
       outputTokens: 0,
       model,
+      isStub: true,
     };
   }
 
-  const res = await anthropic.messages.create({
+  const res = await client.messages.create({
     model,
     max_tokens: options.maxTokens ?? 1024,
     temperature: options.temperature ?? 0.7,
@@ -52,22 +76,33 @@ export async function claude(
     inputTokens: res.usage.input_tokens,
     outputTokens: res.usage.output_tokens,
     model,
+    isStub: false,
   };
 }
 
 /**
  * Claude call that expects a JSON response. Extracts the first JSON
- * object from the response, falling back to the stub path if needed.
+ * object from the response, and throws if the org has no key (the caller
+ * should typically surface this as a 412 to prompt the user to configure
+ * their key in Settings → Integrations).
  */
 export async function claudeJson<T = unknown>(
   prompt: string,
-  options: ClaudeCallOptions = {},
+  options: ClaudeCallOptions,
 ): Promise<T> {
-  const { text } = await claude(
+  const { text, isStub } = await claude(
     prompt +
       '\n\nRespond with ONLY valid JSON — no prose, no code fences, no commentary.',
     options,
   );
+
+  if (isStub) {
+    throw new AppError(
+      'Anthropic API key not configured for this organization. Set one in Settings → Integrations.',
+      412,
+      'ANTHROPIC_KEY_MISSING',
+    );
+  }
 
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) {

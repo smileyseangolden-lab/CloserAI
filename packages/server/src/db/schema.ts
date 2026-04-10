@@ -303,6 +303,11 @@ export const organizations = pgTable('organizations', {
   subscriptionStatus: subscriptionStatusEnum('subscription_status').notNull().default('trial'),
   trialEndsAt: timestamp('trial_ends_at'),
   settings: jsonb('settings').default(sql`'{}'::jsonb`),
+  // Anthropic API key — AES-256-GCM ciphertext. Managed via Settings → Integrations,
+  // never returned to clients. Plaintext is only ever held transiently in memory.
+  encryptedAnthropicApiKey: text('encrypted_anthropic_api_key'),
+  anthropicApiKeyPrefix: varchar('anthropic_api_key_prefix', { length: 16 }),
+  anthropicApiKeyUpdatedAt: timestamp('anthropic_api_key_updated_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
   deletedAt: timestamp('deleted_at'),
