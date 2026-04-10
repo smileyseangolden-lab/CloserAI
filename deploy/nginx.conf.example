@@ -1,12 +1,17 @@
-# Example Nginx config for a production VPS deployment of CloserAI.
+# Example VPS-host nginx config for a production CloserAI deployment.
 # Drop into /etc/nginx/sites-available/closerai and symlink into sites-enabled.
+#
+# Architecture:
+#   Internet  →  VPS nginx (this file, :80/:443)
+#              →  docker proxy container (127.0.0.1:14000)
+#              →  client + server containers (internal docker network)
+#
+# The proxy container handles /api, /socket.io, and / fan-out to the
+# right docker service, so this file only needs a single upstream.
 
-upstream closerai_api {
-    server 127.0.0.1:4000;
-}
-
-upstream closerai_web {
-    server 127.0.0.1:3000;
+upstream closerai_stack {
+    server 127.0.0.1:14000;
+    keepalive 32;
 }
 
 server {
@@ -22,35 +27,27 @@ server {
     ssl_certificate     /etc/letsencrypt/live/app.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/app.example.com/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
 
     client_max_body_size 10M;
     add_header X-Frame-Options SAMEORIGIN;
     add_header X-Content-Type-Options nosniff;
     add_header Referrer-Policy no-referrer-when-downgrade;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
 
-    # API
-    location /api/ {
-        proxy_pass http://closerai_api;
+    # Everything (SPA, API, websockets) funnels through one upstream
+    location / {
+        proxy_pass http://closerai_stack;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-    }
 
-    # WebSockets (Socket.io)
-    location /socket.io/ {
-        proxy_pass http://closerai_api;
-        proxy_http_version 1.1;
+        # Websocket upgrade (Socket.io + Vite HMR)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-    }
-
-    # Frontend SPA
-    location / {
-        proxy_pass http://closerai_web;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_read_timeout 3600s;
     }
 }

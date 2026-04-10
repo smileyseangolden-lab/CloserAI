@@ -7,8 +7,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-closerai}
       POSTGRES_USER: ${POSTGRES_USER:-closerai}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-closerai_dev_password}
-    ports:
-      - "5432:5432"
+    # Internal-only — reachable by other services via the docker network.
+    # Expose via a dev override file (docker-compose.dev.yml) if you need
+    # direct psql access from your host.
+    expose:
+      - "5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -16,13 +19,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - closerai
 
   redis:
     image: redis:7-alpine
     container_name: closerai-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -30,6 +35,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - closerai
 
   server:
     build:
@@ -46,10 +53,12 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-closerai}:${POSTGRES_PASSWORD:-closerai_dev_password}@postgres:5432/${POSTGRES_DB:-closerai}
       REDIS_URL: redis://redis:6379
-    ports:
-      - "4000:4000"
+    expose:
+      - "4000"
     volumes:
       - ./packages/server/src:/app/packages/server/src
+    networks:
+      - closerai
 
   worker:
     build:
@@ -67,6 +76,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-closerai}:${POSTGRES_PASSWORD:-closerai_dev_password}@postgres:5432/${POSTGRES_DB:-closerai}
       REDIS_URL: redis://redis:6379
     command: ["node", "dist/jobs/worker.js"]
+    networks:
+      - closerai
 
   client:
     build:
@@ -77,8 +88,35 @@ services:
     depends_on:
       - server
     env_file: .env
+    expose:
+      - "3000"
+    networks:
+      - closerai
+
+  # -----------------------------------------------------------------------
+  # Internal reverse proxy. This is the ONLY service with a host port
+  # binding. It listens on 127.0.0.1:14000 so your VPS-level nginx can
+  # proxy_pass http://127.0.0.1:14000 for the whole app (SPA + API +
+  # websockets) on a single loopback port. Nothing else is exposed to the
+  # host, which keeps postgres/redis/server off the public network.
+  # -----------------------------------------------------------------------
+  proxy:
+    image: nginx:1.27-alpine
+    container_name: closerai-proxy
+    restart: unless-stopped
+    depends_on:
+      - server
+      - client
     ports:
-      - "3000:3000"
+      - "127.0.0.1:14000:80"
+    volumes:
+      - ./deploy/proxy.nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - closerai
+
+networks:
+  closerai:
+    driver: bridge
 
 volumes:
   pgdata:

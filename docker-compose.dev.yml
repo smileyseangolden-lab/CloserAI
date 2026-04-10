@@ -1,0 +1,24 @@
+# Dev-only overlay. Use on a workstation where you want direct loopback
+# access to postgres, redis, and the server/client for debugging:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# DO NOT copy this to the VPS — the base docker-compose.yml is already
+# VPS-safe (only the proxy binds to 127.0.0.1:14000).
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  server:
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  client:
+    ports:
+      - "127.0.0.1:3000:3000"

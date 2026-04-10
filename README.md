@@ -32,7 +32,8 @@ CloserAI is a full-stack SaaS platform that automates the entire B2B sales lifec
 #    anymore — it's managed in-app per organization.
 cp .env.example .env
 
-# 2. Boot the whole stack
+# 2. Boot the whole stack (prod-safe: only the internal nginx proxy is
+#    bound to the host, on 127.0.0.1:14000)
 docker compose up --build
 
 # 3. Run migrations + seed demo data (in another terminal)
@@ -40,14 +41,55 @@ docker compose exec server npm run db:migrate
 docker compose exec server npm run db:seed
 
 # 4. Open the app
-open http://localhost:3000
+open http://127.0.0.1:14000
 
 # 5. Sign in with demo@closerai.local / demopassword, then go to
 #    Settings → Integrations to paste in your Anthropic API key. Changes
 #    take effect immediately — no restart required.
 ```
 
+For local development where you want direct loopback access to postgres,
+redis, the server and the client (for debugging, psql, BullMQ dashboard,
+etc.) use the dev overlay:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+This adds host bindings on `127.0.0.1:5432`, `:6379`, `:4000`, and `:3000`
+on top of the base stack.
+
 The default seeded login is `demo@closerai.local` / `demopassword`.
+
+## Networking / VPS deployment
+
+The base `docker-compose.yml` is designed to sit behind a VPS-level nginx
+reverse proxy. Only the internal nginx proxy container binds a host port,
+and it binds to `127.0.0.1:14000` — nothing else (postgres, redis, the
+express server, the vite client) is reachable from outside the docker
+network.
+
+```
+Internet
+   │
+   ▼
+VPS nginx :80/:443  (deploy/nginx.conf.example)
+   │
+   ▼
+127.0.0.1:14000
+   │
+   ▼
+proxy container      (deploy/proxy.nginx.conf)
+   ├── /api/*        →  server:4000
+   ├── /socket.io/*  →  server:4000
+   └── /*            →  client:3000
+```
+
+On your VPS, drop `deploy/nginx.conf.example` into
+`/etc/nginx/sites-available/closerai`, edit the `server_name` and cert
+paths, symlink into `sites-enabled`, and `systemctl reload nginx`. The
+only thing that ever touches the public internet is your VPS nginx on
+`:443`.
 
 ## Anthropic API key management
 
