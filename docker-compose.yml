@@ -102,7 +102,9 @@ services:
   # IP-based testing on a VPS before a domain / TLS certs are set up.
   # -----------------------------------------------------------------------
   proxy:
-    image: nginx:1.27-alpine
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.proxy
     container_name: closerai-proxy
     restart: unless-stopped
     depends_on:
@@ -110,8 +112,6 @@ services:
       - client
     ports:
       - "${PROXY_BIND:-127.0.0.1}:${PROXY_PORT:-14000}:80"
-    volumes:
-      - ./deploy/proxy.nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
       - closerai
 
