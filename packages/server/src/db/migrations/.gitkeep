@@ -1,0 +1,2 @@
+# Drizzle migrations live here. Run `npm run db:generate` to create them
+# from the current schema, then `npm run db:migrate` to apply.

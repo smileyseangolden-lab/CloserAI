@@ -1,0 +1,23 @@
+{
+  "name": "closerai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CloserAI - Autonomous AI Sales Platform",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "docker compose up",
+    "dev:server": "npm run dev --workspace=@closerai/server",
+    "dev:client": "npm run dev --workspace=@closerai/client",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "db:migrate": "npm run db:migrate --workspace=@closerai/server",
+    "db:seed": "npm run db:seed --workspace=@closerai/server",
+    "db:generate": "npm run db:generate --workspace=@closerai/server"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

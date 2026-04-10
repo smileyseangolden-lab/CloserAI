@@ -1,0 +1,68 @@
+import { useEffect } from 'react';
+import { Navigate, Route, Routes } from 'react-router';
+import { useAuthStore } from './stores/auth';
+import { AppLayout } from './components/layout/AppLayout';
+import { LoginPage } from './pages/auth/LoginPage';
+import { RegisterPage } from './pages/auth/RegisterPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { LeadsPage } from './pages/LeadsPage';
+import { LeadDetailPage } from './pages/LeadDetailPage';
+import { CampaignsPage } from './pages/CampaignsPage';
+import { CampaignDetailPage } from './pages/CampaignDetailPage';
+import { AgentsPage } from './pages/AgentsPage';
+import { AgentDetailPage } from './pages/AgentDetailPage';
+import { OpportunitiesPage } from './pages/OpportunitiesPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { OnboardingPage } from './pages/OnboardingPage';
+
+function RequireAuth({ children }: { children: JSX.Element }) {
+  const user = useAuthStore((s) => s.user);
+  const loading = useAuthStore((s) => s.loading);
+  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+export default function App() {
+  const loadCurrentUser = useAuthStore((s) => s.loadCurrentUser);
+  useEffect(() => {
+    void loadCurrentUser();
+  }, [loadCurrentUser]);
+
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route
+        path="/onboarding"
+        element={
+          <RequireAuth>
+            <OnboardingPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/"
+        element={
+          <RequireAuth>
+            <AppLayout />
+          </RequireAuth>
+        }
+      >
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="leads" element={<LeadsPage />} />
+        <Route path="leads/:id" element={<LeadDetailPage />} />
+        <Route path="campaigns" element={<CampaignsPage />} />
+        <Route path="campaigns/:id" element={<CampaignDetailPage />} />
+        <Route path="agents" element={<AgentsPage />} />
+        <Route path="agents/:id" element={<AgentDetailPage />} />
+        <Route path="opportunities" element={<OpportunitiesPage />} />
+        <Route path="analytics" element={<AnalyticsPage />} />
+        <Route path="settings/*" element={<SettingsPage />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
