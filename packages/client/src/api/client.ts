@@ -1,4 +1,14 @@
-const API_URL = (import.meta.env.VITE_API_URL as string) ?? '/api/v1';
+// Always use a relative path. Works in:
+//   - Local dev    → Vite dev server proxies /api to the backend (see
+//                    vite.config.ts)
+//   - Docker/VPS   → nginx proxy container routes /api/* to the server
+//                    container on the internal docker network
+// The browser sends the request to the same origin as the page it's
+// running on, which is whatever host the user typed into their URL bar.
+// This sidesteps the classic "http://localhost:4000" bug where an
+// absolute URL baked into the client fails for anyone hitting the app
+// from outside localhost.
+const API_URL = '/api/v1';
 
 interface ApiError {
   error: { code: string; message: string; details?: unknown; requestId?: string };

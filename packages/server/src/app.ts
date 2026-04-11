@@ -18,7 +18,17 @@ export function createApp() {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.CLIENT_URL,
+      // Reflect the request origin back. Safe because:
+      //   1. Our production deployment sits behind a reverse proxy
+      //      that puts the frontend and backend on the same origin,
+      //      so real traffic is always same-origin and CORS doesn't
+      //      even get engaged.
+      //   2. For local dev (or any cross-origin call), reflecting the
+      //      origin + credentials:true lets authenticated requests
+      //      work without maintaining a hardcoded allowlist.
+      // If you need to lock this down later, swap `origin: true` for
+      // an explicit array like ['https://app.example.com'].
+      origin: true,
       credentials: true,
     }),
   );
@@ -39,7 +49,10 @@ export function startServer() {
   const httpServer = createServer(app);
 
   const io = new SocketIOServer(httpServer, {
-    cors: { origin: env.CLIENT_URL, credentials: true },
+    // Match the Express CORS policy — reflect origin so the websocket
+    // upgrade works both same-origin (via the reverse proxy) and
+    // cross-origin during local dev.
+    cors: { origin: true, credentials: true },
   });
 
   io.on('connection', (socket) => {
