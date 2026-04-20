@@ -1,13 +1,46 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { db, pool } from './index.js';
+import { spawn } from 'node:child_process';
+import { pool } from './index.js';
 import { logger } from '../utils/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(__dirname, 'migrations');
+const serverRoot = path.resolve(__dirname, '..', '..');
 
+/**
+ * pgvector must exist before drizzle-kit push runs, because the
+ * agent_knowledge_base.embedding column is declared as vector(1536).
+ */
+async function ensurePgvector() {
+  await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+  logger.info('pgvector extension ensured');
+}
+
+/**
+ * Syncs every table in schema.ts to the database. On a fresh DB this creates
+ * the entire schema; on an existing DB it applies additive changes. `--force`
+ * suppresses the interactive prompt so this runs cleanly inside Docker.
+ */
+async function drizzlePush() {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn('npx', ['drizzle-kit', 'push', '--force'], {
+      cwd: serverRoot,
+      stdio: 'inherit',
+      env: { ...process.env },
+    });
+    child.on('error', reject);
+    child.on('exit', (code) =>
+      code === 0 ? resolve() : reject(new Error(`drizzle-kit push exited ${code}`)),
+    );
+  });
+}
+
+/**
+ * Applies hand-written SQL overlays (indexes, ivfflat, triggers) that drizzle
+ * can't express. Idempotent via the _raw_sql_migrations tracking table.
+ */
 async function runRawSqlMigrations() {
   const entries = await fs.readdir(migrationsDir).catch(() => []);
   const sqlFiles = entries.filter((f) => f.endsWith('.sql')).sort();
@@ -35,20 +68,12 @@ async function runRawSqlMigrations() {
 }
 
 async function runMigrations() {
-  logger.info('Running database migrations...');
+  logger.info('Bootstrapping database...');
   try {
+    await ensurePgvector();
+    await drizzlePush();
     await runRawSqlMigrations();
-    try {
-      await migrate(db, { migrationsFolder: migrationsDir });
-    } catch (err) {
-      const msg = (err as Error).message ?? '';
-      if (msg.includes('_journal.json') || msg.includes('ENOENT')) {
-        logger.info('No drizzle-kit journal present, skipping generated migrations');
-      } else {
-        throw err;
-      }
-    }
-    logger.info('Migrations completed successfully');
+    logger.info('Database ready');
   } catch (err) {
     logger.error({ err }, 'Migration failed');
     process.exitCode = 1;
