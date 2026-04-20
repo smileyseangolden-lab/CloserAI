@@ -2,7 +2,6 @@ import { and, eq, isNull, desc } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import {
   agentProfiles,
-  agentKnowledgeBase,
   leads,
   contacts,
   campaigns,
@@ -12,6 +11,7 @@ import {
 } from '../../db/schema.js';
 import { claude } from './anthropic.js';
 import { NotFoundError } from '../../utils/errors.js';
+import { retrieveRelevantKnowledge, RetrievedKnowledge } from './knowledgeRetrieval.js';
 
 interface MessageDraftInput {
   agentId: string;
@@ -66,13 +66,6 @@ export async function generateMessageDraft(input: MessageDraftInput): Promise<Me
     .where(eq(businessProfiles.organizationId, input.organizationId))
     .limit(1);
 
-  const knowledge = await db
-    .select()
-    .from(agentKnowledgeBase)
-    .where(
-      and(eq(agentKnowledgeBase.agentId, agent.id), eq(agentKnowledgeBase.isActive, true)),
-    );
-
   let campaign: typeof campaigns.$inferSelect | undefined;
   let step: typeof cadenceSteps.$inferSelect | undefined;
   if (input.campaignId) {
@@ -100,6 +93,20 @@ export async function generateMessageDraft(input: MessageDraftInput): Promise<Me
     .where(eq(messages.contactId, contact.id))
     .orderBy(desc(messages.createdAt))
     .limit(10);
+
+  const retrievalQuery = buildRetrievalQuery({
+    contact,
+    lead,
+    campaign,
+    step,
+    conversation,
+    instructions: input.instructions,
+  });
+
+  const knowledge = await retrieveRelevantKnowledge({
+    agentId: agent.id,
+    query: retrievalQuery,
+  });
 
   const systemPrompt = buildSystemPrompt({
     agent,
@@ -152,9 +159,37 @@ export async function generateTestMessage(input: {
 
 Write a sample outbound email in your voice for this scenario. Include a subject line.`;
 
-  const systemPrompt = buildSystemPrompt({ agent });
+  const knowledge = await retrieveRelevantKnowledge({
+    agentId: agent.id,
+    query: input.scenario,
+  });
+
+  const systemPrompt = buildSystemPrompt({ agent, knowledge });
   const { text } = await claude(prompt, { system: systemPrompt, maxTokens: 800 });
   return parseSubjectAndBody(text);
+}
+
+function buildRetrievalQuery(args: {
+  contact: typeof contacts.$inferSelect;
+  lead: typeof leads.$inferSelect;
+  campaign?: typeof campaigns.$inferSelect;
+  step?: typeof cadenceSteps.$inferSelect;
+  conversation: Array<{ direction: string; bodyText: string; createdAt: Date | null }>;
+  instructions?: string;
+}): string {
+  const { contact, lead, campaign, step, conversation, instructions } = args;
+  const parts: string[] = [];
+  if (contact.jobTitle) parts.push(contact.jobTitle);
+  parts.push(`${lead.companyName} ${lead.companyIndustry ?? ''}`);
+  if (campaign?.strategy) parts.push(`strategy:${campaign.strategy}`);
+  if (campaign?.description) parts.push(campaign.description);
+  if (step?.personalizationInstructions) parts.push(step.personalizationInstructions);
+  if (step?.subjectTemplate) parts.push(step.subjectTemplate);
+  if (instructions) parts.push(instructions);
+  // Most recent inbound reply, if any — strongest signal for objection-handling lookup.
+  const lastInbound = conversation.find((m) => m.direction === 'inbound');
+  if (lastInbound) parts.push(lastInbound.bodyText.slice(0, 500));
+  return parts.filter(Boolean).join(' | ');
 }
 
 // ---------- Helpers ----------
@@ -162,7 +197,7 @@ Write a sample outbound email in your voice for this scenario. Include a subject
 function buildSystemPrompt(args: {
   agent: typeof agentProfiles.$inferSelect;
   businessProfile?: typeof businessProfiles.$inferSelect;
-  knowledge?: Array<typeof agentKnowledgeBase.$inferSelect>;
+  knowledge?: RetrievedKnowledge[];
   campaign?: typeof campaigns.$inferSelect;
   step?: typeof cadenceSteps.$inferSelect;
 }): string {
@@ -193,7 +228,12 @@ function buildSystemPrompt(args: {
 
   if (knowledge?.length) {
     parts.push(
-      `Knowledge base:\n${knowledge.map((k) => `- [${k.knowledgeType}] ${k.title}: ${k.content}`).join('\n')}`,
+      `Relevant knowledge (top ${knowledge.length}, ranked by semantic similarity):\n${knowledge
+        .map(
+          (k) =>
+            `- [${k.knowledgeType}${k.similarity ? ` sim=${k.similarity.toFixed(2)}` : ''}] ${k.title}: ${k.content}`,
+        )
+        .join('\n')}`,
     );
   }
 

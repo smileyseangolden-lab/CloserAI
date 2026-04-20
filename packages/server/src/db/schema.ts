@@ -16,6 +16,9 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import { vector } from './vector.js';
+
+export const EMBEDDING_DIMENSIONS = 1536;
 
 // =====================================================================
 // ENUMS
@@ -528,7 +531,9 @@ export const agentKnowledgeBase = pgTable('agent_knowledge_base', {
   knowledgeType: knowledgeTypeEnum('knowledge_type').notNull(),
   title: text('title').notNull(),
   content: text('content').notNull(),
-  // embedding_vector: vector(1536) — added in a follow-up migration once pgvector is installed
+  embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSIONS }),
+  embeddingModel: text('embedding_model'),
+  embeddedAt: timestamp('embedded_at'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),

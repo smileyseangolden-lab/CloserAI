@@ -22,6 +22,12 @@ const envSchema = z.object({
   ANTHROPIC_MODEL: z.string().default('claude-opus-4-6'),
   ANTHROPIC_FAST_MODEL: z.string().default('claude-haiku-4-5-20251001'),
 
+  EMBEDDING_PROVIDER: z.enum(['stub', 'openai', 'voyage']).default('stub'),
+  EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
+  OPENAI_API_KEY: z.string().default(''),
+  VOYAGE_API_KEY: z.string().default(''),
+  RAG_TOP_K: z.coerce.number().int().min(1).max(20).default(5),
+
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),
