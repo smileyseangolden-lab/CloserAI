@@ -6,6 +6,11 @@ import { agentProfiles, agentKnowledgeBase } from '../../db/schema.js';
 import { validateBody } from '../../middleware/validate.js';
 import { NotFoundError } from '../../utils/errors.js';
 import { generateTestMessage } from '../ai/messageGenerator.js';
+import {
+  backfillAgentEmbeddings,
+  embedAndStoreKnowledge,
+} from '../ai/knowledgeRetrieval.js';
+import { logger } from '../../utils/logger.js';
 
 export const agentsRouter = Router();
 
@@ -151,11 +156,54 @@ agentsRouter.post('/:id/knowledge', validateBody(knowledgeSchema), async (req, r
       .insert(agentKnowledgeBase)
       .values({ ...req.body, agentId: req.params.id! })
       .returning();
+    if (created) {
+      embedAndStoreKnowledge(
+        created.id,
+        created.title,
+        created.content,
+        req.auth!.organizationId,
+      ).catch((err) => {
+        logger.error({ err, id: created.id }, 'Failed to embed knowledge entry');
+      });
+    }
     res.status(201).json(created);
   } catch (err) {
     next(err);
   }
 });
+
+agentsRouter.patch(
+  '/:id/knowledge/:knowledgeId',
+  validateBody(knowledgeSchema.partial()),
+  async (req, res, next) => {
+    try {
+      const [updated] = await db
+        .update(agentKnowledgeBase)
+        .set({ ...req.body, updatedAt: new Date() })
+        .where(
+          and(
+            eq(agentKnowledgeBase.id, req.params.knowledgeId!),
+            eq(agentKnowledgeBase.agentId, req.params.id!),
+          ),
+        )
+        .returning();
+      if (!updated) throw new NotFoundError('Knowledge entry');
+      if (req.body.title !== undefined || req.body.content !== undefined) {
+        embedAndStoreKnowledge(
+          updated.id,
+          updated.title,
+          updated.content,
+          req.auth!.organizationId,
+        ).catch((err) => {
+          logger.error({ err, id: updated.id }, 'Failed to re-embed knowledge entry');
+        });
+      }
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 agentsRouter.delete('/:id/knowledge/:knowledgeId', async (req, res, next) => {
   try {
@@ -168,6 +216,15 @@ agentsRouter.delete('/:id/knowledge/:knowledgeId', async (req, res, next) => {
         ),
       );
     res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+agentsRouter.post('/:id/knowledge/backfill', async (req, res, next) => {
+  try {
+    const count = await backfillAgentEmbeddings(req.params.id!, req.auth!.organizationId);
+    res.json({ embedded: count });
   } catch (err) {
     next(err);
   }

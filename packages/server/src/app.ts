@@ -22,8 +22,19 @@ export function createApp() {
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: '2mb' }));
-  app.use(express.urlencoded({ extended: true }));
+  app.use(
+    express.json({
+      limit: '10mb',
+      verify: (req, _res, buf) => {
+        // Preserve the raw body so inbound webhooks can verify HMAC signatures
+        // against the bytes the provider actually sent.
+        (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+      },
+    }),
+  );
+  // Raw MIME ingestion for /api/v1/inbound/email/mime.
+  app.use('/api/v1/inbound/email/mime', express.text({ type: '*/*', limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
   app.use(requestId);
   app.use(pinoHttp({ logger, customProps: (req) => ({ requestId: (req as express.Request).requestId }) }));
 

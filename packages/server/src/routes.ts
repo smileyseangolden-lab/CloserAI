@@ -13,6 +13,8 @@ import { messagesRouter } from './modules/messages/messages.routes.js';
 import { opportunitiesRouter } from './modules/opportunities/opportunities.routes.js';
 import { activitiesRouter } from './modules/activities/activities.routes.js';
 import { analyticsRouter } from './modules/analytics/analytics.routes.js';
+import { inboundRouter } from './modules/inbound/inbound.routes.js';
+import { adminRouter } from './modules/admin/admin.routes.js';
 
 export function createApiRouter() {
   const api = Router();
@@ -21,6 +23,7 @@ export function createApiRouter() {
 
   // Public
   api.use('/auth', authRouter);
+  api.use('/inbound', inboundRouter);
 
   // Authenticated
   api.use('/organizations', requireAuth, organizationsRouter);
@@ -35,6 +38,7 @@ export function createApiRouter() {
   api.use('/opportunities', requireAuth, opportunitiesRouter);
   api.use('/activities', requireAuth, activitiesRouter);
   api.use('/analytics', requireAuth, analyticsRouter);
+  api.use('/admin', requireAuth, adminRouter);
 
   return api;
 }

@@ -1,17 +1,17 @@
-import { and, eq, isNull, desc } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import {
   agentProfiles,
-  agentKnowledgeBase,
   leads,
   contacts,
   campaigns,
   cadenceSteps,
-  messages,
   businessProfiles,
 } from '../../db/schema.js';
 import { claude } from './anthropic.js';
 import { NotFoundError } from '../../utils/errors.js';
+import { retrieveRelevantKnowledge, RetrievedKnowledge } from './knowledgeRetrieval.js';
+import { getThreadSnapshot, ThreadSnapshot } from './threadMemory.js';
 
 interface MessageDraftInput {
   agentId: string;
@@ -66,13 +66,6 @@ export async function generateMessageDraft(input: MessageDraftInput): Promise<Me
     .where(eq(businessProfiles.organizationId, input.organizationId))
     .limit(1);
 
-  const knowledge = await db
-    .select()
-    .from(agentKnowledgeBase)
-    .where(
-      and(eq(agentKnowledgeBase.agentId, agent.id), eq(agentKnowledgeBase.isActive, true)),
-    );
-
   let campaign: typeof campaigns.$inferSelect | undefined;
   let step: typeof cadenceSteps.$inferSelect | undefined;
   if (input.campaignId) {
@@ -90,16 +83,27 @@ export async function generateMessageDraft(input: MessageDraftInput): Promise<Me
       .limit(1);
   }
 
-  const conversation = await db
-    .select({
-      direction: messages.direction,
-      bodyText: messages.bodyText,
-      createdAt: messages.createdAt,
-    })
-    .from(messages)
-    .where(eq(messages.contactId, contact.id))
-    .orderBy(desc(messages.createdAt))
-    .limit(10);
+  const threadSnapshot = await getThreadSnapshot(contact.id, input.organizationId);
+  const conversation = threadSnapshot.recent.map((m) => ({
+    direction: m.direction,
+    bodyText: m.bodyText,
+    createdAt: m.createdAt,
+  }));
+
+  const retrievalQuery = buildRetrievalQuery({
+    contact,
+    lead,
+    campaign,
+    step,
+    conversation,
+    instructions: input.instructions,
+  });
+
+  const knowledge = await retrieveRelevantKnowledge({
+    agentId: agent.id,
+    query: retrievalQuery,
+    organizationId: input.organizationId,
+  });
 
   const systemPrompt = buildSystemPrompt({
     agent,
@@ -107,6 +111,7 @@ export async function generateMessageDraft(input: MessageDraftInput): Promise<Me
     knowledge,
     campaign,
     step,
+    threadSnapshot,
   });
 
   const userPrompt = buildUserPrompt({
@@ -117,12 +122,14 @@ export async function generateMessageDraft(input: MessageDraftInput): Promise<Me
     step,
     conversation,
     instructions: input.instructions,
+    threadSnapshot,
   });
 
   const { text, inputTokens, outputTokens, model } = await claude(userPrompt, {
     system: systemPrompt,
     maxTokens: 1024,
     temperature: 0.7,
+    orgId: input.organizationId,
   });
 
   const { subject, bodyText } = parseSubjectAndBody(text);
@@ -152,9 +159,42 @@ export async function generateTestMessage(input: {
 
 Write a sample outbound email in your voice for this scenario. Include a subject line.`;
 
-  const systemPrompt = buildSystemPrompt({ agent });
-  const { text } = await claude(prompt, { system: systemPrompt, maxTokens: 800 });
+  const knowledge = await retrieveRelevantKnowledge({
+    agentId: agent.id,
+    query: input.scenario,
+    organizationId: input.organizationId,
+  });
+
+  const systemPrompt = buildSystemPrompt({ agent, knowledge });
+  const { text } = await claude(prompt, {
+    system: systemPrompt,
+    maxTokens: 800,
+    orgId: input.organizationId,
+  });
   return parseSubjectAndBody(text);
+}
+
+function buildRetrievalQuery(args: {
+  contact: typeof contacts.$inferSelect;
+  lead: typeof leads.$inferSelect;
+  campaign?: typeof campaigns.$inferSelect;
+  step?: typeof cadenceSteps.$inferSelect;
+  conversation: Array<{ direction: string; bodyText: string; createdAt: Date | null }>;
+  instructions?: string;
+}): string {
+  const { contact, lead, campaign, step, conversation, instructions } = args;
+  const parts: string[] = [];
+  if (contact.jobTitle) parts.push(contact.jobTitle);
+  parts.push(`${lead.companyName} ${lead.companyIndustry ?? ''}`);
+  if (campaign?.strategy) parts.push(`strategy:${campaign.strategy}`);
+  if (campaign?.description) parts.push(campaign.description);
+  if (step?.personalizationInstructions) parts.push(step.personalizationInstructions);
+  if (step?.subjectTemplate) parts.push(step.subjectTemplate);
+  if (instructions) parts.push(instructions);
+  // Most recent inbound reply, if any — strongest signal for objection-handling lookup.
+  const lastInbound = conversation.find((m) => m.direction === 'inbound');
+  if (lastInbound) parts.push(lastInbound.bodyText.slice(0, 500));
+  return parts.filter(Boolean).join(' | ');
 }
 
 // ---------- Helpers ----------
@@ -162,11 +202,12 @@ Write a sample outbound email in your voice for this scenario. Include a subject
 function buildSystemPrompt(args: {
   agent: typeof agentProfiles.$inferSelect;
   businessProfile?: typeof businessProfiles.$inferSelect;
-  knowledge?: Array<typeof agentKnowledgeBase.$inferSelect>;
+  knowledge?: RetrievedKnowledge[];
   campaign?: typeof campaigns.$inferSelect;
   step?: typeof cadenceSteps.$inferSelect;
+  threadSnapshot?: ThreadSnapshot;
 }): string {
-  const { agent, businessProfile, knowledge, campaign, step } = args;
+  const { agent, businessProfile, knowledge, campaign, step, threadSnapshot } = args;
   const parts: string[] = [];
 
   parts.push(
@@ -193,7 +234,18 @@ function buildSystemPrompt(args: {
 
   if (knowledge?.length) {
     parts.push(
-      `Knowledge base:\n${knowledge.map((k) => `- [${k.knowledgeType}] ${k.title}: ${k.content}`).join('\n')}`,
+      `Relevant knowledge (top ${knowledge.length}, ranked by semantic similarity):\n${knowledge
+        .map(
+          (k) =>
+            `- [${k.knowledgeType}${k.similarity ? ` sim=${k.similarity.toFixed(2)}` : ''}] ${k.title}: ${k.content}`,
+        )
+        .join('\n')}`,
+    );
+  }
+
+  if (threadSnapshot?.summary) {
+    parts.push(
+      `Conversation so far (${threadSnapshot.totalMessages} total messages, older ones summarized):\n${threadSnapshot.summary}`,
     );
   }
 
@@ -224,8 +276,9 @@ function buildUserPrompt(args: {
   step?: typeof cadenceSteps.$inferSelect;
   conversation: Array<{ direction: string; bodyText: string; createdAt: Date | null }>;
   instructions?: string;
+  threadSnapshot?: ThreadSnapshot;
 }): string {
-  const { contact, lead, step, conversation, instructions } = args;
+  const { contact, lead, step, conversation, instructions, threadSnapshot } = args;
 
   const lines: string[] = [];
   lines.push(`Prospect: ${contact.firstName ?? ''} ${contact.lastName ?? ''}`.trim());
@@ -236,7 +289,12 @@ function buildUserPrompt(args: {
   if (contact.personalityNotes) lines.push(`Personality notes: ${contact.personalityNotes}`);
 
   if (conversation.length > 0) {
-    lines.push('\nConversation history (most recent first):');
+    const total = threadSnapshot?.totalMessages ?? conversation.length;
+    const label =
+      total > conversation.length
+        ? `Recent messages (last ${conversation.length} of ${total}; older context is in the summary above)`
+        : 'Conversation history';
+    lines.push(`\n${label}:`);
     for (const m of conversation) {
       lines.push(`[${m.direction}] ${m.bodyText.slice(0, 400)}`);
     }

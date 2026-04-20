@@ -21,10 +21,52 @@ export interface EnrichmentResult {
   raw: unknown;
 }
 
+export interface ContactEnrichmentInput {
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  companyDomain?: string;
+  linkedinUrl?: string;
+}
+
+export interface ContactEnrichmentResult {
+  email?: string;
+  emailVerified?: boolean;
+  firstName?: string;
+  lastName?: string;
+  jobTitle?: string;
+  seniority?: string;
+  department?: string;
+  linkedinUrl?: string;
+  twitterUrl?: string;
+  bio?: string;
+  location?: string;
+  phone?: string;
+  raw: unknown;
+}
+
+export interface EmailFinderInput {
+  domain: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+}
+
+export interface EmailFinderResult {
+  email?: string;
+  confidence?: number; // 0..1
+  verified?: boolean;
+  raw: unknown;
+}
+
 export interface LeadEnrichmentProvider {
   enrich(lead: EnrichmentInput): Promise<EnrichmentResult>;
   bulkEnrich(leads: EnrichmentInput[]): Promise<EnrichmentResult[]>;
   checkCredits(): Promise<number>;
+  /** Optional: provider can also enrich a person record. */
+  enrichContact?(input: ContactEnrichmentInput): Promise<ContactEnrichmentResult>;
+  /** Optional: provider can find an email address from name + domain. */
+  findEmail?(input: EmailFinderInput): Promise<EmailFinderResult>;
 }
 
 // ---- Email ----
@@ -83,10 +125,40 @@ export interface LinkedInProfile {
   company?: string;
 }
 
+export interface LinkedInProfileFull extends LinkedInProfile {
+  bio?: string;
+  location?: string;
+  jobTitle?: string;
+  industry?: string;
+  experience?: Array<{ company: string; title: string; startDate?: string; endDate?: string }>;
+  education?: Array<{ school: string; degree?: string }>;
+  publicIdentifier?: string;
+  raw?: unknown;
+}
+
+export interface LinkedInActionResult {
+  success: boolean;
+  externalId?: string;
+  rateLimited?: boolean;
+  reason?: string;
+}
+
+export interface LinkedInAccountStatus {
+  connected: boolean;
+  accountId?: string;
+  rateLimitRemaining?: number;
+  warnings?: string[];
+}
+
 export interface LinkedInProvider {
-  sendConnectionRequest(profile: LinkedInProfile, note: string): Promise<{ success: boolean }>;
-  sendMessage(profile: LinkedInProfile, message: string): Promise<{ success: boolean }>;
-  scrapeProfile(url: string): Promise<LinkedInProfile & { bio?: string }>;
+  sendConnectionRequest(
+    profile: LinkedInProfile,
+    note: string,
+  ): Promise<LinkedInActionResult>;
+  sendMessage(profile: LinkedInProfile, message: string): Promise<LinkedInActionResult>;
+  scrapeProfile(url: string): Promise<LinkedInProfileFull>;
+  /** Optional: returns account-level health so the campaign worker can pause sends. */
+  accountStatus?(): Promise<LinkedInAccountStatus>;
 }
 
 // ---- CRM ----

@@ -1,0 +1,28 @@
+# Environment-specific overrides for docker-compose.yml.
+# Copy to `docker-compose.override.yml` and edit — Compose auto-merges it
+# on top of the base file, and it's gitignored so your local changes never
+# leak into commits.
+#
+# Typical reasons to use this:
+#   - Port conflicts on a shared VPS (something else owns 3000/5432/6379)
+#   - Binding host-only services (postgres/redis) to 127.0.0.1 for safety
+#   - Exposing the client on 0.0.0.0 for remote access
+
+services:
+  postgres:
+    # Host-only bind + remapped external port keeps the DB off the internet.
+    ports:
+      - "127.0.0.1:15432:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:16379:6379"
+
+  client:
+    # Example: host is already using 3000, expose on 18080 to all interfaces.
+    ports:
+      - "0.0.0.0:18080:3000"
+
+  server:
+    ports:
+      - "0.0.0.0:4000:4000"

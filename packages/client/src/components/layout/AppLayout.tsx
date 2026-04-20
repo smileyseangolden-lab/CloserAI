@@ -8,6 +8,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  Plug,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth';
 
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/opportunities', label: 'Pipeline', icon: Target },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/admin/integrations', label: 'Integrations', icon: Plug, roles: ['owner', 'admin'] as const },
 ];
 
 export function AppLayout() {
@@ -39,7 +41,9 @@ export function AppLayout() {
         </div>
 
         <nav className="flex-1 p-3 space-y-1">
-          {navItems.map(({ to, label, icon: Icon }) => (
+          {navItems
+            .filter((item) => !('roles' in item) || (item.roles ?? []).includes(user?.role as never))
+            .map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}

@@ -14,8 +14,28 @@ import {
   real,
   index,
   uniqueIndex,
+  customType,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+
+export const EMBEDDING_DIMENSIONS = 1536;
+
+// pgvector column type. Inlined here (rather than a separate file) so
+// drizzle-kit's schema loader — which doesn't do .js → .ts resolution —
+// can load this module without a relative import.
+const vector = (name: string, config: { dimensions: number }) =>
+  customType<{ data: number[]; driverData: string; config: { dimensions: number } }>({
+    dataType(c) {
+      return `vector(${c?.dimensions ?? config.dimensions})`;
+    },
+    toDriver(value: number[]): string {
+      return `[${value.join(',')}]`;
+    },
+    fromDriver(value: string | number[]): number[] {
+      if (Array.isArray(value)) return value;
+      return JSON.parse(value) as number[];
+    },
+  })(name, config);
 
 // =====================================================================
 // ENUMS
@@ -476,6 +496,9 @@ export const contacts = pgTable(
     lastContactedAt: timestamp('last_contacted_at'),
     engagementScore: integer('engagement_score').notNull().default(0),
     customFields: jsonb('custom_fields').default(sql`'{}'::jsonb`),
+    conversationSummary: text('conversation_summary'),
+    conversationSummaryUpdatedAt: timestamp('conversation_summary_updated_at'),
+    conversationSummaryLastMessageId: uuid('conversation_summary_last_message_id'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
     deletedAt: timestamp('deleted_at'),
@@ -528,7 +551,9 @@ export const agentKnowledgeBase = pgTable('agent_knowledge_base', {
   knowledgeType: knowledgeTypeEnum('knowledge_type').notNull(),
   title: text('title').notNull(),
   content: text('content').notNull(),
-  // embedding_vector: vector(1536) — added in a follow-up migration once pgvector is installed
+  embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSIONS }),
+  embeddingModel: text('embedding_model'),
+  embeddedAt: timestamp('embedded_at'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -798,6 +823,31 @@ export const emailAccounts = pgTable('email_accounts', {
 // =====================================================================
 // SYSTEM & AUDIT
 // =====================================================================
+
+export const providerSettings = pgTable(
+  'provider_settings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    providerKey: text('provider_key').notNull(),
+    settings: jsonb('settings').notNull().default(sql`'{}'::jsonb`),
+    encryptedSecrets: text('encrypted_secrets'),
+    isActive: boolean('is_active').notNull().default(true),
+    updatedByUserId: uuid('updated_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    orgProviderUnique: uniqueIndex('provider_settings_org_provider_unique').on(
+      t.organizationId,
+      t.providerKey,
+    ),
+  }),
+);
 
 export const apiKeys = pgTable('api_keys', {
   id: uuid('id').primaryKey().defaultRandom(),

@@ -1,5 +1,4 @@
 import nodemailer from 'nodemailer';
-import { env } from '../../config/env.js';
 import type {
   EmailProvider,
   EmailMessage,
@@ -9,53 +8,63 @@ import type {
   InboundMessage,
 } from '../types.js';
 import { logger } from '../../utils/logger.js';
+import { resolveProviderConfig } from '../../modules/admin/settingsService.js';
 
 /**
- * Default SMTP email provider. Uses the org-level SMTP config from env
- * when no per-account override is available. When SMTP credentials are
- * missing (local dev) this logs instead of sending.
+ * Per-org SMTP transport. Reads the org's saved SMTP settings (or env fallback)
+ * for every send so admin updates take effect immediately.
  */
 class SMTPEmailProvider implements EmailProvider {
+  constructor(
+    private readonly config: {
+      host?: string;
+      port?: number;
+      user?: string;
+      password?: string;
+      from?: string;
+    },
+  ) {}
+
   async send(message: EmailMessage): Promise<SendResult> {
-    if (!env.SMTP_HOST) {
+    if (!this.config.host) {
       logger.warn({ to: message.to, subject: message.subject }, '[stub] SMTP not configured — would send email');
       return { messageId: `stub-${Date.now()}`, accepted: true };
     }
-
     const transporter = nodemailer.createTransport({
-      host: env.SMTP_HOST,
-      port: env.SMTP_PORT ?? 587,
-      secure: (env.SMTP_PORT ?? 587) === 465,
-      auth: env.SMTP_USER
-        ? { user: env.SMTP_USER, pass: env.SMTP_PASSWORD }
+      host: this.config.host,
+      port: this.config.port ?? 587,
+      secure: (this.config.port ?? 587) === 465,
+      auth: this.config.user
+        ? { user: this.config.user, pass: this.config.password ?? '' }
         : undefined,
     });
-
     const info = await transporter.sendMail({
-      from: message.from,
+      from: message.from || this.config.from,
       to: message.to,
       subject: message.subject,
       text: message.text,
       html: message.html,
       headers: message.headers,
     });
-
     return { messageId: info.messageId, accepted: info.accepted.length > 0 };
   }
 
   async checkDeliverability(domain: string): Promise<DeliverabilityReport> {
-    // Stub — real impl would do DNS lookups for SPF/DKIM/DMARC.
     return { domain, spf: false, dkim: false, dmarc: false };
   }
 
   async syncInbox(_account: EmailAccountConfig): Promise<InboundMessage[]> {
-    // Stub — real impl would use IMAP and mailparser.
     return [];
   }
 }
 
-let cached: EmailProvider | null = null;
-export function getEmailProvider(): EmailProvider {
-  if (!cached) cached = new SMTPEmailProvider();
-  return cached;
+export async function getEmailProvider(orgId: string): Promise<EmailProvider> {
+  const cfg = await resolveProviderConfig(orgId, 'smtp');
+  return new SMTPEmailProvider({
+    host: cfg.values.host as string | undefined,
+    port: cfg.values.port as number | undefined,
+    user: cfg.values.user as string | undefined,
+    password: cfg.values.password as string | undefined,
+    from: cfg.values.from as string | undefined,
+  });
 }
