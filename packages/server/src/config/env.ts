@@ -34,6 +34,20 @@ const envSchema = z.object({
   SMTP_PASSWORD: z.string().optional(),
   SMTP_FROM: z.string().optional(),
 
+  // Domain used in the Message-ID we stamp onto outbound email so inbound
+  // webhooks can match replies back to the originating thread. In prod this
+  // should be a domain you actually send from.
+  OUTBOUND_MESSAGE_ID_DOMAIN: z.string().default('closerai.local'),
+
+  // Shared secret for inbound webhook authentication. Providers that sign
+  // requests (Postmark, SendGrid, Mailgun) should be verified with their
+  // own signatures; this is the fallback for generic providers.
+  INBOUND_WEBHOOK_SECRET: z.string().default(''),
+
+  // Threshold over which we summarize old messages into a running memory.
+  THREAD_SUMMARY_THRESHOLD: z.coerce.number().int().min(4).max(100).default(8),
+  THREAD_SUMMARY_KEEP_RECENT: z.coerce.number().int().min(2).max(50).default(4),
+
   RATE_LIMIT_USER_PER_MIN: z.coerce.number().default(100),
   RATE_LIMIT_ORG_PER_MIN: z.coerce.number().default(1000),
 });
