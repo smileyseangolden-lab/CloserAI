@@ -78,7 +78,7 @@ services:
       - server
     env_file: .env
     ports:
-      - "3000:3000"
+      - "13000:3000"
 
 volumes:
   pgdata:
