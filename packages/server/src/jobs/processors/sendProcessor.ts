@@ -6,6 +6,7 @@ import { messages, contacts, activities, emailAccounts } from '../../db/schema.j
 import { logger } from '../../utils/logger.js';
 import { env } from '../../config/env.js';
 import { getEmailProvider } from '../../integrations/email/index.js';
+import { getLinkedInProvider } from '../../integrations/linkedin/index.js';
 
 interface SendJobData {
   messageId: string;
@@ -106,6 +107,81 @@ export async function processSendJob(job: Job<SendJobData>) {
         contactId: msg.contactId,
         activityType: 'email_sent',
         description: `Email sent: ${msg.subject ?? '(no subject)'}`,
+      });
+    } else if (msg.channel === 'linkedin') {
+      if (!contact.linkedinUrl) {
+        await db
+          .update(messages)
+          .set({ status: 'failed', errorMessage: 'Contact has no LinkedIn URL' })
+          .where(eq(messages.id, messageId));
+        return;
+      }
+
+      // Connection request vs direct message is selected via metadata.linkedinAction.
+      // Default is 'message'; first-touch campaign steps should set 'connection'.
+      const action =
+        (msg.metadata as { linkedinAction?: string } | null)?.linkedinAction === 'connection'
+          ? 'connection'
+          : 'message';
+
+      const linkedin = getLinkedInProvider();
+      if (linkedin.accountStatus) {
+        const status = await linkedin.accountStatus();
+        if (!status.connected) {
+          await db
+            .update(messages)
+            .set({
+              status: 'failed',
+              errorMessage: `LinkedIn account not connected: ${status.warnings?.join(', ') ?? 'unknown'}`,
+            })
+            .where(eq(messages.id, messageId));
+          throw new Error('LinkedIn account not connected');
+        }
+      }
+
+      const profile = {
+        profileUrl: contact.linkedinUrl,
+        firstName: contact.firstName ?? undefined,
+        lastName: contact.lastName ?? undefined,
+      };
+
+      const result =
+        action === 'connection'
+          ? await linkedin.sendConnectionRequest(profile, msg.bodyText)
+          : await linkedin.sendMessage(profile, msg.bodyText);
+
+      if (!result.success) {
+        await db
+          .update(messages)
+          .set({
+            status: result.rateLimited ? 'queued' : 'failed',
+            errorMessage: result.reason ?? 'LinkedIn send failed',
+          })
+          .where(eq(messages.id, messageId));
+        if (result.rateLimited) {
+          throw new Error('LinkedIn rate limited');
+        }
+        return;
+      }
+
+      await db
+        .update(messages)
+        .set({
+          status: 'sent',
+          externalMessageId: result.externalId ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(messages.id, messageId));
+
+      await db.insert(activities).values({
+        organizationId: msg.organizationId,
+        contactId: msg.contactId,
+        activityType:
+          action === 'connection' ? 'linkedin_connection_sent' : 'linkedin_message_sent',
+        description:
+          action === 'connection'
+            ? `LinkedIn connection request sent`
+            : `LinkedIn message sent`,
       });
     } else {
       logger.warn({ channel: msg.channel }, 'Channel not yet implemented in send processor');

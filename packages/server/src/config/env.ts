@@ -28,6 +28,20 @@ const envSchema = z.object({
   VOYAGE_API_KEY: z.string().default(''),
   RAG_TOP_K: z.coerce.number().int().min(1).max(20).default(5),
 
+  // Enrichment
+  ENRICHMENT_PROVIDER: z.enum(['stub', 'apollo', 'clearbit']).default('stub'),
+  ENRICHMENT_FALLBACK_PROVIDER: z.enum(['stub', 'apollo', 'clearbit', 'none']).default('none'),
+  APOLLO_API_KEY: z.string().default(''),
+  CLEARBIT_API_KEY: z.string().default(''),
+  HUNTER_API_KEY: z.string().default(''),
+
+  // LinkedIn
+  LINKEDIN_PROVIDER: z.enum(['stub', 'unipile']).default('stub'),
+  UNIPILE_API_KEY: z.string().default(''),
+  UNIPILE_DSN: z.string().default(''), // e.g. https://api1.unipile.com:13111
+  UNIPILE_ACCOUNT_ID: z.string().default(''),
+  PROXYCURL_API_KEY: z.string().default(''),
+
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),
