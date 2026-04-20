@@ -18,6 +18,8 @@ export interface RetrieveOptions {
   query: string;
   topK?: number;
   minSimilarity?: number;
+  /** Forwarded to embed() so per-org embeddings config is honored. */
+  organizationId?: string;
 }
 
 /**
@@ -28,7 +30,7 @@ export async function retrieveRelevantKnowledge(
   opts: RetrieveOptions,
 ): Promise<RetrievedKnowledge[]> {
   const topK = opts.topK ?? env.RAG_TOP_K;
-  const { vector } = await embed(opts.query);
+  const { vector } = await embed(opts.query, opts.organizationId);
   const vectorLiteral = `[${vector.join(',')}]`;
 
   try {
@@ -92,8 +94,13 @@ export async function retrieveRelevantKnowledge(
 /**
  * Embeds a single knowledge entry and stores the vector + model + timestamp.
  */
-export async function embedAndStoreKnowledge(id: string, title: string, content: string) {
-  const { vector, model } = await embed(`${title}\n\n${content}`);
+export async function embedAndStoreKnowledge(
+  id: string,
+  title: string,
+  content: string,
+  organizationId?: string,
+) {
+  const { vector, model } = await embed(`${title}\n\n${content}`, organizationId);
   await db.execute(sql`
     UPDATE agent_knowledge_base
     SET embedding = ${`[${vector.join(',')}]`}::vector,
@@ -108,7 +115,7 @@ export async function embedAndStoreKnowledge(id: string, title: string, content:
  * Re-embeds every active knowledge entry for an agent. Used for backfill
  * after import or when switching embedding providers.
  */
-export async function backfillAgentEmbeddings(agentId: string): Promise<number> {
+export async function backfillAgentEmbeddings(agentId: string, organizationId?: string): Promise<number> {
   const rows = await db
     .select({
       id: agentKnowledgeBase.id,
@@ -120,7 +127,7 @@ export async function backfillAgentEmbeddings(agentId: string): Promise<number> 
 
   let count = 0;
   for (const row of rows) {
-    await embedAndStoreKnowledge(row.id, row.title, row.content);
+    await embedAndStoreKnowledge(row.id, row.title, row.content, organizationId);
     count++;
   }
   return count;

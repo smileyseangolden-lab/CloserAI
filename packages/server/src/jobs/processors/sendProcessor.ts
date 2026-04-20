@@ -79,7 +79,7 @@ export async function processSendJob(job: Job<SendJobData>) {
         headers['References'] = `<${lastInboundId}>`;
       }
 
-      const provider = getEmailProvider();
+      const provider = await getEmailProvider(msg.organizationId);
       const result = await provider.send({
         from: account?.emailAddress ?? `noreply@${env.OUTBOUND_MESSAGE_ID_DOMAIN}`,
         to: contact.email ?? '',
@@ -124,7 +124,7 @@ export async function processSendJob(job: Job<SendJobData>) {
           ? 'connection'
           : 'message';
 
-      const linkedin = getLinkedInProvider();
+      const linkedin = await getLinkedInProvider(msg.organizationId);
       if (linkedin.accountStatus) {
         const status = await linkedin.accountStatus();
         if (!status.connected) {

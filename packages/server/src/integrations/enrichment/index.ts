@@ -7,8 +7,8 @@ import type {
   EmailFinderInput,
   EmailFinderResult,
 } from '../types.js';
-import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
+import { resolveProviderConfig } from '../../modules/admin/settingsService.js';
 import { ApolloEnrichmentProvider } from './apollo.js';
 import { ClearbitEnrichmentProvider } from './clearbit.js';
 import { HunterEmailFinder } from './hunter.js';
@@ -16,15 +16,22 @@ import { StubEnrichmentProvider } from './stub.js';
 
 type ProviderName = 'stub' | 'apollo' | 'clearbit';
 
-function build(name: ProviderName): LeadEnrichmentProvider | null {
+async function buildProvider(
+  orgId: string,
+  name: ProviderName,
+): Promise<LeadEnrichmentProvider | null> {
   try {
     switch (name) {
-      case 'apollo':
-        if (!env.APOLLO_API_KEY) return null;
-        return new ApolloEnrichmentProvider(env.APOLLO_API_KEY);
-      case 'clearbit':
-        if (!env.CLEARBIT_API_KEY) return null;
-        return new ClearbitEnrichmentProvider(env.CLEARBIT_API_KEY);
+      case 'apollo': {
+        const c = await resolveProviderConfig(orgId, 'apollo');
+        const key = c.values.apiKey as string | undefined;
+        return key ? new ApolloEnrichmentProvider(key) : null;
+      }
+      case 'clearbit': {
+        const c = await resolveProviderConfig(orgId, 'clearbit');
+        const key = c.values.apiKey as string | undefined;
+        return key ? new ClearbitEnrichmentProvider(key) : null;
+      }
       case 'stub':
       default:
         return new StubEnrichmentProvider();
@@ -35,18 +42,12 @@ function build(name: ProviderName): LeadEnrichmentProvider | null {
   }
 }
 
-/**
- * Layered enrichment: try the configured primary provider first, then the
- * fallback, then a stub. Hunter is layered on top for email-finding.
- */
 class LayeredEnrichmentProvider implements LeadEnrichmentProvider {
-  private hunter: HunterEmailFinder | null;
   constructor(
     private readonly primary: LeadEnrichmentProvider,
     private readonly fallback: LeadEnrichmentProvider | null,
-  ) {
-    this.hunter = env.HUNTER_API_KEY ? new HunterEmailFinder(env.HUNTER_API_KEY) : null;
-  }
+    private readonly hunter: HunterEmailFinder | null,
+  ) {}
 
   async enrich(lead: EnrichmentInput): Promise<EnrichmentResult> {
     try {
@@ -92,7 +93,6 @@ class LayeredEnrichmentProvider implements LeadEnrichmentProvider {
         logger.warn({ err, domain: input.domain }, 'Hunter email finder failed');
       }
     }
-    // Apollo's people/match also returns an email when given name + domain.
     if (this.primary.enrichContact) {
       try {
         const r = await this.primary.enrichContact({
@@ -119,20 +119,24 @@ function hasUsefulCompanyData(r: EnrichmentResult): boolean {
   return !!(r.industry || r.size || r.location || (r.description && r.description.length > 30));
 }
 
-let cached: LeadEnrichmentProvider | null = null;
-export function getEnrichmentProvider(): LeadEnrichmentProvider {
-  if (cached) return cached;
-  const primary =
-    build(env.ENRICHMENT_PROVIDER) ?? new StubEnrichmentProvider();
-  const fallback =
-    env.ENRICHMENT_FALLBACK_PROVIDER === 'none'
-      ? null
-      : build(env.ENRICHMENT_FALLBACK_PROVIDER as ProviderName);
-  cached = new LayeredEnrichmentProvider(primary, fallback);
-  return cached;
-}
+/**
+ * Returns an enrichment provider scoped to one org. Reads the org's settings
+ * (or env fallback) on each call; settingsService caches the config for 60s
+ * so this remains cheap.
+ */
+export async function getEnrichmentProvider(orgId: string): Promise<LeadEnrichmentProvider> {
+  const routing = await resolveProviderConfig(orgId, 'enrichment');
+  const primaryName = (routing.values.provider as ProviderName) ?? 'stub';
+  const fallbackName = routing.values.fallbackProvider as ProviderName | 'none' | undefined;
 
-/** Test-only reset. */
-export function _resetEnrichmentProviderCache() {
-  cached = null;
+  const primary = (await buildProvider(orgId, primaryName)) ?? new StubEnrichmentProvider();
+  const fallback =
+    fallbackName && fallbackName !== 'none' ? await buildProvider(orgId, fallbackName) : null;
+
+  const hunterCfg = await resolveProviderConfig(orgId, 'hunter');
+  const hunter = hunterCfg.values.apiKey
+    ? new HunterEmailFinder(hunterCfg.values.apiKey as string)
+    : null;
+
+  return new LayeredEnrichmentProvider(primary, fallback, hunter);
 }

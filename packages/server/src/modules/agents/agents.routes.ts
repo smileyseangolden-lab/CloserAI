@@ -157,7 +157,12 @@ agentsRouter.post('/:id/knowledge', validateBody(knowledgeSchema), async (req, r
       .values({ ...req.body, agentId: req.params.id! })
       .returning();
     if (created) {
-      embedAndStoreKnowledge(created.id, created.title, created.content).catch((err) => {
+      embedAndStoreKnowledge(
+        created.id,
+        created.title,
+        created.content,
+        req.auth!.organizationId,
+      ).catch((err) => {
         logger.error({ err, id: created.id }, 'Failed to embed knowledge entry');
       });
     }
@@ -184,7 +189,12 @@ agentsRouter.patch(
         .returning();
       if (!updated) throw new NotFoundError('Knowledge entry');
       if (req.body.title !== undefined || req.body.content !== undefined) {
-        embedAndStoreKnowledge(updated.id, updated.title, updated.content).catch((err) => {
+        embedAndStoreKnowledge(
+          updated.id,
+          updated.title,
+          updated.content,
+          req.auth!.organizationId,
+        ).catch((err) => {
           logger.error({ err, id: updated.id }, 'Failed to re-embed knowledge entry');
         });
       }
@@ -213,7 +223,7 @@ agentsRouter.delete('/:id/knowledge/:knowledgeId', async (req, res, next) => {
 
 agentsRouter.post('/:id/knowledge/backfill', async (req, res, next) => {
   try {
-    const count = await backfillAgentEmbeddings(req.params.id!);
+    const count = await backfillAgentEmbeddings(req.params.id!, req.auth!.organizationId);
     res.json({ embedded: count });
   } catch (err) {
     next(err);

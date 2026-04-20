@@ -25,7 +25,7 @@ export async function processEnrichJob(job: Job<{ leadId: string; organizationId
   const [lead] = await db.select().from(leads).where(eq(leads.id, leadId)).limit(1);
   if (!lead) return;
 
-  const provider = getEnrichmentProvider();
+  const provider = await getEnrichmentProvider(organizationId);
   const sampleContact = await db
     .select()
     .from(contacts)

@@ -14,6 +14,7 @@ import { AgentDetailPage } from './pages/AgentDetailPage';
 import { OpportunitiesPage } from './pages/OpportunitiesPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { IntegrationsPage } from './pages/IntegrationsPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -61,6 +62,7 @@ export default function App() {
         <Route path="opportunities" element={<OpportunitiesPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="settings/*" element={<SettingsPage />} />
+        <Route path="admin/integrations" element={<IntegrationsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

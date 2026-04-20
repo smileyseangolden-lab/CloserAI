@@ -25,9 +25,18 @@ export interface ThreadSnapshot {
  * The summary is cached on the contact row and only regenerated when new
  * messages have arrived since the last summarization.
  */
-export async function getThreadSnapshot(contactId: string): Promise<ThreadSnapshot> {
-  const threshold = env.THREAD_SUMMARY_THRESHOLD;
-  const keepRecent = env.THREAD_SUMMARY_KEEP_RECENT;
+export async function getThreadSnapshot(
+  contactId: string,
+  organizationId?: string,
+): Promise<ThreadSnapshot> {
+  const general = organizationId
+    ? await (await import('../admin/settingsService.js')).resolveProviderConfig(
+        organizationId,
+        'general',
+      )
+    : null;
+  const threshold = (general?.values.threadSummaryThreshold as number) ?? env.THREAD_SUMMARY_THRESHOLD;
+  const keepRecent = (general?.values.threadSummaryKeepRecent as number) ?? env.THREAD_SUMMARY_KEEP_RECENT;
 
   const [{ count }] = (await db.execute<{ count: number }>(
     sql`SELECT COUNT(*)::int AS count FROM messages WHERE contact_id = ${contactId}`,
@@ -107,7 +116,7 @@ export async function getThreadSnapshot(contactId: string): Promise<ThreadSnapsh
     )
     .join('\n');
 
-  const summary = await buildSummary(transcript);
+  const summary = await buildSummary(transcript, organizationId);
 
   if (summary && newestOlderThanRecent[0]) {
     await db
@@ -124,7 +133,10 @@ export async function getThreadSnapshot(contactId: string): Promise<ThreadSnapsh
   return { summary: summary ?? undefined, recent, totalMessages: total };
 }
 
-async function buildSummary(transcript: string): Promise<string | null> {
+async function buildSummary(
+  transcript: string,
+  organizationId?: string,
+): Promise<string | null> {
   if (!transcript.trim()) return null;
   const prompt = `Summarize this sales conversation transcript for a sales rep who is about to write the next reply.
 
@@ -142,6 +154,7 @@ ${transcript}
       fast: true,
       maxTokens: 400,
       temperature: 0.2,
+      orgId: organizationId,
     });
     return text.trim();
   } catch (err) {

@@ -807,6 +807,31 @@ export const emailAccounts = pgTable('email_accounts', {
 // SYSTEM & AUDIT
 // =====================================================================
 
+export const providerSettings = pgTable(
+  'provider_settings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    providerKey: text('provider_key').notNull(),
+    settings: jsonb('settings').notNull().default(sql`'{}'::jsonb`),
+    encryptedSecrets: text('encrypted_secrets'),
+    isActive: boolean('is_active').notNull().default(true),
+    updatedByUserId: uuid('updated_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    orgProviderUnique: uniqueIndex('provider_settings_org_provider_unique').on(
+      t.organizationId,
+      t.providerKey,
+    ),
+  }),
+);
+
 export const apiKeys = pgTable('api_keys', {
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: uuid('organization_id')

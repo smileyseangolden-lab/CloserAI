@@ -5,8 +5,8 @@ import type {
   LinkedInActionResult,
   LinkedInAccountStatus,
 } from '../types.js';
-import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
+import { resolveProviderConfig } from '../../modules/admin/settingsService.js';
 import { UnipileLinkedInProvider } from './unipile.js';
 import { ProxycurlScraper } from './proxycurl.js';
 
@@ -27,10 +27,6 @@ class StubLinkedInProvider implements LinkedInProvider {
   }
 }
 
-/**
- * Layered provider: messaging via Unipile (or stub), profile-scrape preferring
- * Proxycurl (cheaper, cache-friendly) and falling back to the messaging provider.
- */
 class LayeredLinkedInProvider implements LinkedInProvider {
   constructor(
     private readonly messaging: LinkedInProvider,
@@ -40,11 +36,9 @@ class LayeredLinkedInProvider implements LinkedInProvider {
   sendConnectionRequest(profile: LinkedInProfile, note: string) {
     return this.messaging.sendConnectionRequest(profile, note);
   }
-
   sendMessage(profile: LinkedInProfile, message: string) {
     return this.messaging.sendMessage(profile, message);
   }
-
   async scrapeProfile(url: string): Promise<LinkedInProfileFull> {
     if (this.scraper) {
       try {
@@ -55,28 +49,32 @@ class LayeredLinkedInProvider implements LinkedInProvider {
     }
     return this.messaging.scrapeProfile(url);
   }
-
   accountStatus() {
     return this.messaging.accountStatus?.() ?? Promise.resolve({ connected: false });
   }
 }
 
-let cached: LinkedInProvider | null = null;
-export function getLinkedInProvider(): LinkedInProvider {
-  if (cached) return cached;
+/**
+ * Org-scoped LinkedIn provider. Pulls Unipile credentials and Proxycurl
+ * scraping key from per-org settings (with env fallback).
+ */
+export async function getLinkedInProvider(orgId: string): Promise<LinkedInProvider> {
+  const routing = await resolveProviderConfig(orgId, 'linkedin');
+  const provider = (routing.values.provider as string) ?? 'stub';
+
   let messaging: LinkedInProvider;
   try {
-    if (
-      env.LINKEDIN_PROVIDER === 'unipile' &&
-      env.UNIPILE_DSN &&
-      env.UNIPILE_API_KEY &&
-      env.UNIPILE_ACCOUNT_ID
-    ) {
-      messaging = new UnipileLinkedInProvider(
-        env.UNIPILE_DSN,
-        env.UNIPILE_API_KEY,
-        env.UNIPILE_ACCOUNT_ID,
-      );
+    if (provider === 'unipile') {
+      const cfg = await resolveProviderConfig(orgId, 'unipile');
+      const dsn = cfg.values.dsn as string | undefined;
+      const apiKey = cfg.values.apiKey as string | undefined;
+      const accountId = cfg.values.accountId as string | undefined;
+      if (dsn && apiKey && accountId) {
+        messaging = new UnipileLinkedInProvider(dsn, apiKey, accountId);
+      } else {
+        logger.warn({ orgId }, 'Unipile selected but credentials incomplete; using stub');
+        messaging = new StubLinkedInProvider();
+      }
     } else {
       messaging = new StubLinkedInProvider();
     }
@@ -84,12 +82,11 @@ export function getLinkedInProvider(): LinkedInProvider {
     logger.warn({ err }, 'Falling back to stub LinkedIn provider');
     messaging = new StubLinkedInProvider();
   }
-  const scraper = env.PROXYCURL_API_KEY ? new ProxycurlScraper(env.PROXYCURL_API_KEY) : null;
-  cached = new LayeredLinkedInProvider(messaging, scraper);
-  return cached;
-}
 
-/** Test-only reset. */
-export function _resetLinkedInProviderCache() {
-  cached = null;
+  const scrCfg = await resolveProviderConfig(orgId, 'proxycurl');
+  const scraper = scrCfg.values.apiKey
+    ? new ProxycurlScraper(scrCfg.values.apiKey as string)
+    : null;
+
+  return new LayeredLinkedInProvider(messaging, scraper);
 }

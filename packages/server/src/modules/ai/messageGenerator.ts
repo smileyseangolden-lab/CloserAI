@@ -83,7 +83,7 @@ export async function generateMessageDraft(input: MessageDraftInput): Promise<Me
       .limit(1);
   }
 
-  const threadSnapshot = await getThreadSnapshot(contact.id);
+  const threadSnapshot = await getThreadSnapshot(contact.id, input.organizationId);
   const conversation = threadSnapshot.recent.map((m) => ({
     direction: m.direction,
     bodyText: m.bodyText,
@@ -102,6 +102,7 @@ export async function generateMessageDraft(input: MessageDraftInput): Promise<Me
   const knowledge = await retrieveRelevantKnowledge({
     agentId: agent.id,
     query: retrievalQuery,
+    organizationId: input.organizationId,
   });
 
   const systemPrompt = buildSystemPrompt({
@@ -128,6 +129,7 @@ export async function generateMessageDraft(input: MessageDraftInput): Promise<Me
     system: systemPrompt,
     maxTokens: 1024,
     temperature: 0.7,
+    orgId: input.organizationId,
   });
 
   const { subject, bodyText } = parseSubjectAndBody(text);
@@ -160,10 +162,15 @@ Write a sample outbound email in your voice for this scenario. Include a subject
   const knowledge = await retrieveRelevantKnowledge({
     agentId: agent.id,
     query: input.scenario,
+    organizationId: input.organizationId,
   });
 
   const systemPrompt = buildSystemPrompt({ agent, knowledge });
-  const { text } = await claude(prompt, { system: systemPrompt, maxTokens: 800 });
+  const { text } = await claude(prompt, {
+    system: systemPrompt,
+    maxTokens: 800,
+    orgId: input.organizationId,
+  });
   return parseSubjectAndBody(text);
 }
 
