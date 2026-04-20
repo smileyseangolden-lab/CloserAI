@@ -16,3 +16,6 @@ pgdata/
 redis-data/
 .turbo/
 .cache/
+
+# Per-environment Docker Compose overrides (ports, host bindings, etc.)
+docker-compose.override.yml
