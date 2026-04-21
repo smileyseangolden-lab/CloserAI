@@ -1,36 +1,36 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
-import {
-  LayoutDashboard,
-  Users,
-  Megaphone,
-  Bot,
-  Target,
-  BarChart3,
-  Settings,
-  LogOut,
-  Plug,
-} from 'lucide-react';
+import { LayoutDashboard, LogOut, Plug, CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth';
+import { STAGES } from '../../workflow/stages';
+import { api } from '../../api/client';
 
-const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/leads', label: 'Leads', icon: Users },
-  { to: '/campaigns', label: 'Campaigns', icon: Megaphone },
-  { to: '/agents', label: 'Agents', icon: Bot },
-  { to: '/opportunities', label: 'Pipeline', icon: Target },
-  { to: '/analytics', label: 'Analytics', icon: BarChart3 },
-  { to: '/settings', label: 'Settings', icon: Settings },
-  { to: '/admin/integrations', label: 'Integrations', icon: Plug, roles: ['owner', 'admin'] as const },
-];
+interface WorkspaceStage {
+  stageId: string;
+  status: 'locked' | 'in_progress' | 'approved';
+  version: number;
+}
 
 export function AppLayout() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const [stages, setStages] = useState<WorkspaceStage[]>([]);
+
+  useEffect(() => {
+    void api.get<WorkspaceStage[]>('/workspace').then(setStages).catch(() => setStages([]));
+
+    const onFocus = () => void api.get<WorkspaceStage[]>('/workspace').then(setStages).catch(() => {});
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
+  const statusMap = new Map(stages.map((s) => [s.stageId, s.status]));
+  const isAdmin = user?.role === 'owner' || user?.role === 'admin';
 
   return (
     <div className="flex h-screen bg-slate-50">
-      <aside className="w-60 bg-white border-r border-slate-200 flex flex-col">
+      <aside className="w-72 bg-white border-r border-slate-200 flex flex-col">
         <div className="h-16 px-6 flex items-center border-b border-slate-200">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-brand-500 text-white flex items-center justify-center font-bold">
@@ -40,25 +40,81 @@ export function AppLayout() {
           </div>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
-          {navItems
-            .filter((item) => !('roles' in item) || (item.roles ?? []).includes(user?.role as never))
-            .map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${
-                  isActive
-                    ? 'bg-brand-50 text-brand-700'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`
-              }
-            >
-              <Icon size={18} />
-              {label}
-            </NavLink>
-          ))}
+        <nav className="flex-1 overflow-y-auto p-3">
+          <NavLink
+            to="/dashboard"
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition mb-3 ${
+                isActive
+                  ? 'bg-brand-50 text-brand-700'
+                  : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+              }`
+            }
+          >
+            <LayoutDashboard size={18} />
+            Dashboard
+          </NavLink>
+
+          <div className="px-3 text-[11px] font-semibold tracking-wider uppercase text-slate-400 mb-2">
+            Workflow
+          </div>
+
+          <ol className="space-y-0.5">
+            {STAGES.map((stage, i) => {
+              const status = statusMap.get(stage.id) ?? 'locked';
+              const isLastApproved =
+                status !== 'approved' &&
+                i > 0 &&
+                statusMap.get(STAGES[i - 1]!.id) === 'approved';
+              return (
+                <li key={stage.id}>
+                  <NavLink
+                    to={`/stages/${stage.id}`}
+                    className={({ isActive }) =>
+                      `group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition ${
+                        isActive
+                          ? 'bg-brand-50 text-brand-700 font-medium'
+                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      }`
+                    }
+                  >
+                    <StageIndicator status={status} order={stage.order} />
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate flex items-center gap-2">
+                        {stage.title}
+                        {isLastApproved && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-500 text-white font-semibold">
+                            Next
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </NavLink>
+                </li>
+              );
+            })}
+          </ol>
+
+          {isAdmin && (
+            <>
+              <div className="px-3 mt-5 text-[11px] font-semibold tracking-wider uppercase text-slate-400 mb-2">
+                Admin
+              </div>
+              <NavLink
+                to="/admin/integrations"
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                    isActive
+                      ? 'bg-brand-50 text-brand-700'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`
+                }
+              >
+                <Plug size={18} />
+                Integrations
+              </NavLink>
+            </>
+          )}
         </nav>
 
         <div className="p-3 border-t border-slate-200">
@@ -89,6 +145,26 @@ export function AppLayout() {
       <main className="flex-1 overflow-auto">
         <Outlet />
       </main>
+    </div>
+  );
+}
+
+function StageIndicator({
+  status,
+  order,
+}: {
+  status: 'locked' | 'in_progress' | 'approved';
+  order: number;
+}) {
+  if (status === 'approved') {
+    return <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0" />;
+  }
+  if (status === 'in_progress') {
+    return <Loader2 size={18} className="text-amber-500 flex-shrink-0" />;
+  }
+  return (
+    <div className="w-[18px] h-[18px] flex-shrink-0 rounded-full border border-slate-300 text-[10px] font-semibold text-slate-500 flex items-center justify-center">
+      {order}
     </div>
   );
 }

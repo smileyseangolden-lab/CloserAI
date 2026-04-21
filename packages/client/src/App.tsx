@@ -5,6 +5,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { StagePage } from './pages/stages/StagePage';
 import { LeadsPage } from './pages/LeadsPage';
 import { LeadDetailPage } from './pages/LeadDetailPage';
 import { CampaignsPage } from './pages/CampaignsPage';
@@ -53,6 +54,9 @@ export default function App() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="stages/:stageId" element={<StagePage />} />
+
+        {/* Legacy routes — kept reachable from deep links and the workflow pages. */}
         <Route path="leads" element={<LeadsPage />} />
         <Route path="leads/:id" element={<LeadDetailPage />} />
         <Route path="campaigns" element={<CampaignsPage />} />

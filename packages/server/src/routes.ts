@@ -15,6 +15,8 @@ import { activitiesRouter } from './modules/activities/activities.routes.js';
 import { analyticsRouter } from './modules/analytics/analytics.routes.js';
 import { inboundRouter } from './modules/inbound/inbound.routes.js';
 import { adminRouter } from './modules/admin/admin.routes.js';
+import { workspaceRouter } from './modules/workspace/workspace.routes.js';
+import { assistantRouter } from './modules/assistant/assistant.routes.js';
 
 export function createApiRouter() {
   const api = Router();
@@ -39,6 +41,8 @@ export function createApiRouter() {
   api.use('/activities', requireAuth, activitiesRouter);
   api.use('/analytics', requireAuth, analyticsRouter);
   api.use('/admin', requireAuth, adminRouter);
+  api.use('/workspace', requireAuth, workspaceRouter);
+  api.use('/assistant', requireAuth, assistantRouter);
 
   return api;
 }

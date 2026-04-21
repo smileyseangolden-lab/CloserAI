@@ -308,6 +308,17 @@ export const jobStatusEnum = pgEnum('job_status', [
   'retrying',
 ]);
 
+export const workspaceStageStatusEnum = pgEnum('workspace_stage_status', [
+  'locked',
+  'in_progress',
+  'approved',
+]);
+
+export const assistantMessageRoleEnum = pgEnum('assistant_message_role', [
+  'user',
+  'assistant',
+]);
+
 // =====================================================================
 // CORE ENTITIES
 // =====================================================================
@@ -929,6 +940,59 @@ export const jobQueue = pgTable(
 );
 
 // =====================================================================
+// WORKSPACE (STAGE-BY-STAGE AI CO-PILOT STATE)
+// =====================================================================
+
+export const workspaceStages = pgTable(
+  'workspace_stages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    stageId: text('stage_id').notNull(),
+    status: workspaceStageStatusEnum('status').notNull().default('in_progress'),
+    data: jsonb('data').notNull().default(sql`'{}'::jsonb`),
+    version: integer('version').notNull().default(1),
+    updatedByUserId: uuid('updated_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    approvedAt: timestamp('approved_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    orgStageUnique: uniqueIndex('workspace_stages_org_stage_unique').on(
+      t.organizationId,
+      t.stageId,
+    ),
+  }),
+);
+
+export const assistantMessages = pgTable(
+  'assistant_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    stageId: text('stage_id').notNull(),
+    role: assistantMessageRoleEnum('role').notNull(),
+    content: text('content').notNull(),
+    proposedDraft: jsonb('proposed_draft'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    orgStageIdx: index('idx_assistant_messages_org_stage').on(
+      t.organizationId,
+      t.stageId,
+      t.createdAt,
+    ),
+  }),
+);
+
+// =====================================================================
 // TYPE EXPORTS
 // =====================================================================
 
@@ -951,3 +1015,7 @@ export type NewMessage = typeof messages.$inferInsert;
 export type Activity = typeof activities.$inferSelect;
 export type Opportunity = typeof opportunities.$inferSelect;
 export type NewOpportunity = typeof opportunities.$inferInsert;
+export type WorkspaceStage = typeof workspaceStages.$inferSelect;
+export type NewWorkspaceStage = typeof workspaceStages.$inferInsert;
+export type AssistantMessage = typeof assistantMessages.$inferSelect;
+export type NewAssistantMessage = typeof assistantMessages.$inferInsert;
