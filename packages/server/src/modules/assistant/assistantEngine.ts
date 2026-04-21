@@ -40,6 +40,23 @@ export interface EngineResponse {
   outputTokens: number;
 }
 
+/** Streaming event payloads emitted by runAssistantTurnStream. */
+export type StreamEvent =
+  | { type: 'meta'; model: string }
+  | { type: 'delta'; text: string }
+  | { type: 'tool_use'; name: string; input: unknown }
+  | { type: 'tool_result'; name: string; result: string }
+  | {
+      type: 'done';
+      text: string;
+      proposedDraft: Record<string, unknown> | null;
+      toolTrace: EngineResponse['toolTrace'];
+      inputTokens: number;
+      outputTokens: number;
+      model: string;
+    }
+  | { type: 'error'; message: string };
+
 interface ResolvedModels {
   apiKey: string;
   defaultModel: string;
@@ -145,6 +162,104 @@ export async function runAssistantTurn(req: EngineRequest): Promise<EngineRespon
     inputTokens: totalIn,
     outputTokens: totalOut,
   };
+}
+
+/**
+ * Streaming variant of runAssistantTurn. Calls `emit` for each SSE-shaped
+ * event: meta, delta (token chunks), tool_use, tool_result, done, error.
+ * The tool-calling loop still runs to completion between streamed text turns.
+ */
+export async function runAssistantTurnStream(
+  req: EngineRequest,
+  emit: (event: StreamEvent) => void,
+): Promise<void> {
+  const models = await resolveModels(req.orgId);
+  const model = modelForStage(req.stageId, models);
+  emit({ type: 'meta', model });
+
+  if (!models.apiKey) {
+    const text =
+      "(No Anthropic API key configured — I can't run research tools. Add a key in Admin → Integrations, then re-ask.)";
+    emit({ type: 'delta', text });
+    emit({
+      type: 'done',
+      text,
+      proposedDraft: null,
+      toolTrace: [],
+      inputTokens: 0,
+      outputTokens: 0,
+      model,
+    });
+    return;
+  }
+
+  const client = new Anthropic({ apiKey: models.apiKey });
+  const tools = toolsForStage(req.stageId);
+  const toolCtx: ToolContext = { organizationId: req.orgId, stageId: req.stageId };
+
+  const messages: Anthropic.MessageParam[] = [
+    ...req.history.map((t) => ({ role: t.role, content: t.content })),
+    { role: 'user', content: req.userMessage },
+  ];
+  const toolTrace: EngineResponse['toolTrace'] = [];
+  let totalIn = 0;
+  let totalOut = 0;
+  let accumulatedText = '';
+
+  for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
+    const stream = client.messages.stream({
+      model,
+      max_tokens: 2048,
+      temperature: 0.5,
+      system: req.systemPrompt,
+      tools: tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        input_schema: t.input_schema as Anthropic.Tool['input_schema'],
+      })),
+      messages,
+    });
+
+    // Forward text deltas to the SSE listener as they arrive.
+    stream.on('text', (delta) => {
+      accumulatedText += delta;
+      emit({ type: 'delta', text: delta });
+    });
+
+    const finalMsg = await stream.finalMessage();
+    totalIn += finalMsg.usage?.input_tokens ?? 0;
+    totalOut += finalMsg.usage?.output_tokens ?? 0;
+
+    if (finalMsg.stop_reason === 'tool_use') {
+      const toolUses = finalMsg.content.filter(
+        (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+      );
+      messages.push({ role: 'assistant', content: finalMsg.content });
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      for (const tu of toolUses) {
+        emit({ type: 'tool_use', name: tu.name, input: tu.input });
+        const result = await runTool(tu.name, tu.input as Record<string, unknown>, toolCtx);
+        emit({ type: 'tool_result', name: tu.name, result: result.slice(0, 1000) });
+        toolTrace.push({ name: tu.name, input: tu.input, result: result.slice(0, 2000) });
+        toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: result });
+      }
+      messages.push({ role: 'user', content: toolResults });
+      continue;
+    }
+
+    break;
+  }
+
+  const { visible, draft } = extractDraft(accumulatedText);
+  emit({
+    type: 'done',
+    text: visible,
+    proposedDraft: draft,
+    toolTrace,
+    inputTokens: totalIn,
+    outputTokens: totalOut,
+    model,
+  });
 }
 
 function extractDraft(text: string): {

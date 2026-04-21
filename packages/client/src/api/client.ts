@@ -76,6 +76,17 @@ class ApiClient {
     return this.request<T>(path);
   }
 
+  /** Raw fetch for SSE/streaming endpoints. Adds the Authorization header. */
+  async fetchRaw(path: string, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers);
+    if (this.accessToken) headers.set('Authorization', `Bearer ${this.accessToken}`);
+    return fetch(`${API_URL}${path}`, { ...init, headers });
+  }
+
+  get accessTokenValue() {
+    return this.accessToken;
+  }
+
   post<T>(path: string, body?: unknown) {
     return this.request<T>(path, { method: 'POST', body: JSON.stringify(body ?? {}) });
   }

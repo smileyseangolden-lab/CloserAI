@@ -11,7 +11,7 @@ import {
   isValidStageId,
   STAGE_DEFINITIONS,
 } from '../workspace/workspace.stages.js';
-import { runAssistantTurn } from './assistantEngine.js';
+import { runAssistantTurn, runAssistantTurnStream, type StreamEvent } from './assistantEngine.js';
 
 export const assistantRouter = Router();
 
@@ -156,6 +156,118 @@ Only include keys you are confident about. Omit the block entirely when the turn
     });
   } catch (err) {
     logger.error({ err }, 'assistant chat failed');
+    next(err);
+  }
+});
+
+/**
+ * Server-sent-events streaming variant of /chat. Emits the same events the
+ * engine produces so the client can render tokens as they arrive instead of
+ * waiting for the full turn. Uses query-param auth fallback because the
+ * browser EventSource API can't set the Authorization header — callers pass
+ * the access token as `?token=`.
+ */
+assistantRouter.get('/:stageId/chat/stream', async (req, res, next) => {
+  try {
+    const { stageId } = req.params;
+    if (!stageId || !isValidStageId(stageId)) {
+      throw new ValidationError('Invalid stage id');
+    }
+    const message = String(req.query.message ?? '').trim();
+    if (!message) throw new ValidationError('Missing message');
+
+    const stage = getStageDefinition(stageId)!;
+    const orgId = req.auth!.organizationId;
+    const userId = req.auth!.userId;
+
+    const prior = await db
+      .select()
+      .from(assistantMessages)
+      .where(
+        and(
+          eq(assistantMessages.organizationId, orgId),
+          eq(assistantMessages.stageId, stageId),
+        ),
+      )
+      .orderBy(asc(assistantMessages.createdAt));
+    const approvedStages = await db
+      .select()
+      .from(workspaceStages)
+      .where(
+        and(
+          eq(workspaceStages.organizationId, orgId),
+          eq(workspaceStages.status, 'approved'),
+        ),
+      );
+    const priorContextBlock = approvedStages.length
+      ? 'Previously approved workspace data from earlier stages:\n' +
+        approvedStages
+          .map((s) => `- ${s.stageId}: ${JSON.stringify(s.data).slice(0, 2000)}`)
+          .join('\n')
+      : 'No prior approved stages yet.';
+
+    const systemPrompt = `${stage.systemPrompt}\n\n${priorContextBlock}\n\nUse research tools proactively. Handle refine commands. End with a \`\`\`json proposedDraft\`\`\` block only when structured changes apply.`;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    const write = (evt: StreamEvent) => {
+      res.write(`data: ${JSON.stringify(evt)}\n\n`);
+    };
+
+    // Persist the user message up-front so the transcript reflects it even if
+    // the connection drops mid-stream.
+    const [userRow] = await db
+      .insert(assistantMessages)
+      .values({ organizationId: orgId, userId, stageId, role: 'user', content: message })
+      .returning();
+    write({ type: 'meta', model: 'pending' });
+    res.write(`event: user_saved\ndata: ${JSON.stringify(userRow)}\n\n`);
+
+    let finalText = '';
+    let finalDraft: Record<string, unknown> | null = null;
+    try {
+      await runAssistantTurnStream(
+        {
+          stageId,
+          systemPrompt,
+          history: prior.map((m) => ({ role: m.role, content: m.content })),
+          userMessage: message,
+          orgId,
+        },
+        (evt) => {
+          write(evt);
+          if (evt.type === 'done') {
+            finalText = evt.text;
+            finalDraft = evt.proposedDraft;
+          }
+        },
+      );
+    } catch (err) {
+      logger.error({ err }, 'assistant stream failed');
+      write({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'stream failed',
+      });
+    }
+
+    const [assistantRow] = await db
+      .insert(assistantMessages)
+      .values({
+        organizationId: orgId,
+        userId,
+        stageId,
+        role: 'assistant',
+        content: finalText,
+        proposedDraft: finalDraft,
+      })
+      .returning();
+    res.write(`event: assistant_saved\ndata: ${JSON.stringify(assistantRow)}\n\n`);
+    res.end();
+  } catch (err) {
     next(err);
   }
 });
