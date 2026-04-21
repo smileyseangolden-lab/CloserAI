@@ -3,6 +3,7 @@ import { Rocket, ShieldCheck, Pause, Play, AlertOctagon } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
+import { CrmWizard } from './CrmWizard';
 
 interface DeploymentRow {
   id: string;
@@ -71,6 +72,7 @@ export function DeploymentStage() {
       onApproved={() => setRefreshKey((k) => k + 1)}
       sidePanel={
         <div className="space-y-4">
+          <CrmWizard />
           <div className="rounded-xl border border-slate-200 p-4">
             <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
               <Rocket size={12} /> Deployments · {deployments.length}

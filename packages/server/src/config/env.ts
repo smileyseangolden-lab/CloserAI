@@ -64,6 +64,18 @@ const envSchema = z.object({
 
   RATE_LIMIT_USER_PER_MIN: z.coerce.number().default(100),
   RATE_LIMIT_ORG_PER_MIN: z.coerce.number().default(1000),
+
+  // CRM OAuth — per-provider client credentials. Fall back to admin
+  // provider_settings overrides resolved via resolveProviderConfig().
+  HUBSPOT_CLIENT_ID: z.string().default(''),
+  HUBSPOT_CLIENT_SECRET: z.string().default(''),
+  SALESFORCE_CLIENT_ID: z.string().default(''),
+  SALESFORCE_CLIENT_SECRET: z.string().default(''),
+  PIPEDRIVE_CLIENT_ID: z.string().default(''),
+  PIPEDRIVE_CLIENT_SECRET: z.string().default(''),
+
+  // How often the optimization scheduler runs (minutes). 0 disables it.
+  OPTIMIZATION_SCHEDULER_INTERVAL_MIN: z.coerce.number().default(360),
 });
 
 export const env = envSchema.parse(process.env);

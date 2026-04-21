@@ -17,6 +17,7 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { CrmCallbackPage } from './pages/oauth/CrmCallbackPage';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const user = useAuthStore((s) => s.user);
@@ -36,6 +37,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      {/* OAuth popup landing page — must render outside the AppLayout. */}
+      <Route path="/oauth/crm-callback" element={<CrmCallbackPage />} />
       <Route
         path="/onboarding"
         element={

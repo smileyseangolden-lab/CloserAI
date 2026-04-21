@@ -421,6 +421,25 @@ export const experimentStatusEnum = pgEnum('experiment_status', [
 
 export const experimentVariantEnum = pgEnum('experiment_variant', ['A', 'B']);
 
+export const crmProviderEnum = pgEnum('crm_provider', [
+  'hubspot',
+  'salesforce',
+  'pipedrive',
+]);
+
+export const crmConnectionStatusEnum = pgEnum('crm_connection_status', [
+  'pending',
+  'connected',
+  'error',
+  'disconnected',
+]);
+
+export const crmMappingDirectionEnum = pgEnum('crm_mapping_direction', [
+  'push',
+  'pull',
+  'both',
+]);
+
 // =====================================================================
 // CORE ENTITIES
 // =====================================================================
@@ -1473,6 +1492,80 @@ export const experimentResults = pgTable(
 );
 
 // =====================================================================
+// CRM INTEGRATIONS
+// =====================================================================
+
+export const crmConnections = pgTable(
+  'crm_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    provider: crmProviderEnum('provider').notNull(),
+    status: crmConnectionStatusEnum('status').notNull().default('pending'),
+    accountId: text('account_id'),
+    accountName: text('account_name'),
+    scopes: text('scopes').array(),
+    /** Encrypted JSON: { accessToken, refreshToken, tokenType, instanceUrl }. */
+    encryptedTokens: text('encrypted_tokens'),
+    expiresAt: timestamp('expires_at'),
+    lastSyncedAt: timestamp('last_synced_at'),
+    lastError: text('last_error'),
+    metadata: jsonb('metadata').default(sql`'{}'::jsonb`),
+    connectedByUserId: uuid('connected_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    orgProviderUnique: uniqueIndex('crm_connections_org_provider_unique').on(
+      t.organizationId,
+      t.provider,
+    ),
+  }),
+);
+
+export const crmOauthStates = pgTable(
+  'crm_oauth_states',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    provider: crmProviderEnum('provider').notNull(),
+    state: text('state').notNull().unique(),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    redirectUri: text('redirect_uri').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    expiresAt: timestamp('expires_at').notNull(),
+  },
+);
+
+export const crmFieldMappings = pgTable(
+  'crm_field_mappings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => crmConnections.id, { onDelete: 'cascade' }),
+    /** e.g. "lead", "contact", "opportunity". */
+    entity: text('entity').notNull(),
+    localField: text('local_field').notNull(),
+    remoteField: text('remote_field').notNull(),
+    direction: crmMappingDirectionEnum('direction').notNull().default('push'),
+    transform: text('transform'),
+    isRequired: boolean('is_required').notNull().default(false),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    connEntityIdx: index('idx_crm_mappings_conn_entity').on(t.connectionId, t.entity),
+  }),
+);
+
+// =====================================================================
 // TYPE EXPORTS
 // =====================================================================
 
@@ -1531,3 +1624,7 @@ export type Experiment = typeof experiments.$inferSelect;
 export type NewExperiment = typeof experiments.$inferInsert;
 export type ExperimentResult = typeof experimentResults.$inferSelect;
 export type NewExperimentResult = typeof experimentResults.$inferInsert;
+export type CrmConnection = typeof crmConnections.$inferSelect;
+export type NewCrmConnection = typeof crmConnections.$inferInsert;
+export type CrmFieldMapping = typeof crmFieldMappings.$inferSelect;
+export type NewCrmFieldMapping = typeof crmFieldMappings.$inferInsert;

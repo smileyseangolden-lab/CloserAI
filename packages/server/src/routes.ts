@@ -25,6 +25,7 @@ import { pilotRouter } from './modules/pilot/pilot.routes.js';
 import { handoffRouter } from './modules/handoff/handoff.routes.js';
 import { queriesRouter } from './modules/queries/queries.routes.js';
 import { optimizationRouter } from './modules/optimization/optimization.routes.js';
+import { crmRouter } from './modules/crm/crm.routes.js';
 
 export function createApiRouter() {
   const api = Router();
@@ -59,6 +60,7 @@ export function createApiRouter() {
   api.use('/handoff', requireAuth, handoffRouter);
   api.use('/queries', requireAuth, queriesRouter);
   api.use('/optimization', requireAuth, optimizationRouter);
+  api.use('/crm', requireAuth, crmRouter);
 
   return api;
 }
