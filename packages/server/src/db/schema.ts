@@ -440,6 +440,19 @@ export const crmMappingDirectionEnum = pgEnum('crm_mapping_direction', [
   'both',
 ]);
 
+export const managerRoleEnum = pgEnum('manager_role', [
+  'sales_manager',
+  'marketing_manager',
+  'cro',
+]);
+
+export const managerCadenceEnum = pgEnum('manager_cadence', [
+  'hourly',
+  'daily',
+  'weekly',
+  'manual',
+]);
+
 // =====================================================================
 // CORE ENTITIES
 // =====================================================================
@@ -1566,6 +1579,60 @@ export const crmFieldMappings = pgTable(
 );
 
 // =====================================================================
+// MANAGER AGENTS (observers that coach the IC agents)
+// =====================================================================
+
+export const managerAgents = pgTable(
+  'manager_agents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    role: managerRoleEnum('role').notNull(),
+    name: text('name').notNull(),
+    description: text('description'),
+    systemPromptOverride: text('system_prompt_override'),
+    cadence: managerCadenceEnum('cadence').notNull().default('daily'),
+    isActive: boolean('is_active').notNull().default(true),
+    config: jsonb('config').default(sql`'{}'::jsonb`),
+    lastRunAt: timestamp('last_run_at'),
+    nextRunAt: timestamp('next_run_at'),
+    lastRunSummary: text('last_run_summary'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    orgRoleUnique: uniqueIndex('manager_agents_org_role_unique').on(t.organizationId, t.role),
+    orgNextRunIdx: index('idx_manager_agents_next_run').on(t.isActive, t.nextRunAt),
+  }),
+);
+
+export const managerDigests = pgTable(
+  'manager_digests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    managerAgentId: uuid('manager_agent_id')
+      .notNull()
+      .references(() => managerAgents.id, { onDelete: 'cascade' }),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    role: managerRoleEnum('role').notNull(),
+    cadence: managerCadenceEnum('cadence').notNull(),
+    content: text('content').notNull(),
+    summary: text('summary'),
+    metrics: jsonb('metrics').default(sql`'{}'::jsonb`),
+    proposalsCreated: integer('proposals_created').notNull().default(0),
+    knowledgeCreated: integer('knowledge_created').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    orgCreatedIdx: index('idx_manager_digests_org_created').on(t.organizationId, t.createdAt),
+  }),
+);
+
+// =====================================================================
 // TYPE EXPORTS
 // =====================================================================
 
@@ -1628,3 +1695,7 @@ export type CrmConnection = typeof crmConnections.$inferSelect;
 export type NewCrmConnection = typeof crmConnections.$inferInsert;
 export type CrmFieldMapping = typeof crmFieldMappings.$inferSelect;
 export type NewCrmFieldMapping = typeof crmFieldMappings.$inferInsert;
+export type ManagerAgent = typeof managerAgents.$inferSelect;
+export type NewManagerAgent = typeof managerAgents.$inferInsert;
+export type ManagerDigest = typeof managerDigests.$inferSelect;
+export type NewManagerDigest = typeof managerDigests.$inferInsert;

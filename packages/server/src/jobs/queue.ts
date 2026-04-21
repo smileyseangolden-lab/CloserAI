@@ -31,6 +31,7 @@ export const replyQueue = new Queue<{ messageId: string }>('reply', { connection
 export const optimizationQueue = new Queue<{ organizationId: string }>('optimization', {
   connection,
 });
+export const managerQueue = new Queue<{ managerAgentId: string }>('manager', { connection });
 
 export const sendEvents = new QueueEvents('send', { connection });
 export const campaignEvents = new QueueEvents('campaign', { connection });

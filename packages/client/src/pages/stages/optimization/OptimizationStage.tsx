@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Wand2, Beaker, Check, X, Play, StopCircle, Power, Zap } from 'lucide-react';
+import { Wand2, Beaker, Check, X, Play, StopCircle, Power, Zap, ShieldCheck } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
+import { ManagersPanel } from './ManagersPanel';
 
 interface ProposalRow {
   id: string;
@@ -44,7 +45,7 @@ export function OptimizationStage() {
   const [scheduler, setScheduler] = useState<SchedulerState | null>(null);
   const [runBusy, setRunBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [tab, setTab] = useState<'proposals' | 'experiments'>('proposals');
+  const [tab, setTab] = useState<'proposals' | 'experiments' | 'managers'>('proposals');
 
   useEffect(() => {
     void Promise.all([
@@ -163,9 +164,14 @@ export function OptimizationStage() {
                 <span className="ml-1 text-[10px] text-slate-500">{experiments.length}</span>
               )}
             </TabBtn>
+            <TabBtn active={tab === 'managers'} onClick={() => setTab('managers')}>
+              <ShieldCheck size={12} /> Managers
+            </TabBtn>
           </div>
 
-          {tab === 'proposals' ? (
+          {tab === 'managers' ? (
+            <ManagersPanel />
+          ) : tab === 'proposals' ? (
             <div className="space-y-3">
               {pending.length === 0 && resolved.length === 0 && (
                 <div className="text-xs text-slate-400 px-1">
