@@ -20,20 +20,38 @@ async function ensurePgvector() {
 
 /**
  * Syncs every table in schema.ts to the database. On a fresh DB this creates
- * the entire schema; on an existing DB it applies additive changes. `--force`
- * suppresses the interactive prompt so this runs cleanly inside Docker.
+ * the entire schema; on an existing DB it applies additive changes.
+ *
+ * `--force` suppresses the "you are about to run destructive SQL" warning,
+ * but drizzle-kit push *still* prompts interactively when it can't
+ * automatically disambiguate a schema change (e.g. "is this a new table, or
+ * was an existing one renamed?"). Those prompts default to the safe, purely
+ * additive choice — "create table", "add column" — which is exactly what we
+ * want for every additive change in this repo.
+ *
+ * We pipe a generous stream of newlines into the child's stdin to accept
+ * every such default non-interactively. That keeps `npm run db:migrate`
+ * runnable end-to-end inside Docker / CI without a TTY.
  */
 async function drizzlePush() {
   return new Promise<void>((resolve, reject) => {
     const child = spawn('npx', ['drizzle-kit', 'push', '--force'], {
       cwd: serverRoot,
-      stdio: 'inherit',
+      stdio: ['pipe', 'inherit', 'inherit'],
       env: { ...process.env },
     });
     child.on('error', reject);
     child.on('exit', (code) =>
       code === 0 ? resolve() : reject(new Error(`drizzle-kit push exited ${code}`)),
     );
+
+    if (child.stdin) {
+      // 200 newlines covers many schema additions with plenty of headroom.
+      // Writes that arrive before a prompt queue in stdin and are consumed
+      // one-per-prompt; excess newlines are discarded when we end().
+      child.stdin.write('\n'.repeat(200));
+      child.stdin.end();
+    }
   });
 }
 
