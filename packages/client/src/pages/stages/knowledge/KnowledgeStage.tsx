@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { BookOpen, Globe2, Search, Trash2, Upload } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { BookOpen, FileText, Globe2, Search, Sparkles, Trash2, Upload } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
@@ -30,9 +30,11 @@ export function KnowledgeStage() {
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteContent, setPasteContent] = useState('');
   const [urlInput, setUrlInput] = useState('');
-  const [busy, setBusy] = useState<'paste' | 'url' | null>(null);
+  const [busy, setBusy] = useState<'paste' | 'url' | 'pdf' | 'auto' | null>(null);
   const [searchQ, setSearchQ] = useState('');
   const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [autoResult, setAutoResult] = useState<{ count: number } | null>(null);
 
   useEffect(() => {
     void api
@@ -82,6 +84,37 @@ export function KnowledgeStage() {
     setHits(r);
   }
 
+  async function uploadPdf(file: File) {
+    setBusy('pdf');
+    try {
+      const base64 = await fileToBase64(file);
+      await api.post('/knowledge/upload-pdf', {
+        filename: file.name,
+        base64,
+      });
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function autoGenerate() {
+    if (!confirm('Generate seed battlecards, FAQs, and objection playbooks from your approved profile + value props?')) return;
+    setBusy('auto');
+    setAutoResult(null);
+    try {
+      const r = await api.post<{ count: number }>('/knowledge/auto-generate', {});
+      setAutoResult(r);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Generation failed');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <StepAssistant
       key={`kn-${refreshKey}`}
@@ -115,24 +148,64 @@ export function KnowledgeStage() {
                 {busy === 'paste' ? 'Embedding…' : 'Add pasted entry'}
               </button>
             </div>
-            <div className="border-t border-slate-200 pt-3">
-              <div className="flex gap-2">
+            <div className="border-t border-slate-200 pt-3 space-y-3">
+              <div>
+                <div className="flex gap-2">
+                  <input
+                    className="input text-sm flex-1"
+                    placeholder="https://your-help-center/article"
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                  />
+                  <button
+                    className="btn-secondary"
+                    onClick={ingestUrl}
+                    disabled={busy === 'url' || !urlInput.trim()}
+                  >
+                    <Globe2 size={12} /> Fetch
+                  </button>
+                </div>
+                <div className="text-xs text-slate-400 mt-1">
+                  Strips HTML and embeds the first ~20k chars.
+                </div>
+              </div>
+              <div>
                 <input
-                  className="input text-sm flex-1"
-                  placeholder="https://your-help-center/article"
-                  value={urlInput}
-                  onChange={(e) => setUrlInput(e.target.value)}
+                  ref={fileRef}
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void uploadPdf(f);
+                    e.target.value = '';
+                  }}
                 />
                 <button
-                  className="btn-secondary"
-                  onClick={ingestUrl}
-                  disabled={busy === 'url' || !urlInput.trim()}
+                  className="btn-secondary w-full justify-center"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={busy === 'pdf'}
                 >
-                  <Globe2 size={12} /> Fetch
+                  <FileText size={12} /> {busy === 'pdf' ? 'Parsing…' : 'Upload PDF'}
                 </button>
+                <div className="text-xs text-slate-400 mt-1">
+                  PDFs are chunked, embedded, and searchable immediately.
+                </div>
               </div>
-              <div className="text-xs text-slate-400 mt-1">
-                Strips HTML and embeds the first ~20k chars.
+              <div>
+                <button
+                  className="btn-primary w-full justify-center"
+                  onClick={autoGenerate}
+                  disabled={busy === 'auto'}
+                >
+                  <Sparkles size={12} />{' '}
+                  {busy === 'auto' ? 'Generating…' : 'Auto-generate battlecards + FAQs + playbooks'}
+                </button>
+                {autoResult && (
+                  <div className="text-xs text-emerald-700 mt-1">
+                    Generated {autoResult.count} entries from your profile + value props.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -220,4 +293,18 @@ export function KnowledgeStage() {
       }
     />
   );
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') return reject(new Error('Unexpected reader result'));
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('Read failed'));
+    reader.readAsDataURL(file);
+  });
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { UserCog, Wand2, Trash2 } from 'lucide-react';
+import { FileText, UserCog, Wand2, Trash2 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
@@ -32,6 +32,10 @@ export function HandoffStage() {
   const [compileInput, setCompileInput] = useState('');
   const [compiled, setCompiled] = useState<unknown>(null);
   const [compiling, setCompiling] = useState(false);
+  const [packetOppId, setPacketOppId] = useState('');
+  const [packetLeadId, setPacketLeadId] = useState('');
+  const [packet, setPacket] = useState<string | null>(null);
+  const [packetBusy, setPacketBusy] = useState(false);
 
   useEffect(() => {
     void Promise.all([
@@ -75,6 +79,25 @@ export function HandoffStage() {
     if (!confirm('Delete this handoff rule?')) return;
     await api.delete(`/handoff/rules/${id}`);
     setRefreshKey((k) => k + 1);
+  }
+
+  async function generatePacket() {
+    if (!packetOppId.trim() && !packetLeadId.trim()) return;
+    setPacketBusy(true);
+    setPacket(null);
+    try {
+      const r = await api.post<{ packet: string }>('/handoff/context-packet', {
+        opportunityId: packetOppId.trim() || undefined,
+        leadId: packetLeadId.trim() || undefined,
+      });
+      setPacket(r.packet);
+    } catch (err) {
+      setPacket(
+        `**Error**\n\n${err instanceof Error ? err.message : 'Could not generate packet.'}`,
+      );
+    } finally {
+      setPacketBusy(false);
+    }
   }
 
   return (
@@ -157,6 +180,42 @@ export function HandoffStage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+              <FileText size={12} /> Preview context packet
+            </div>
+            <div className="text-xs text-slate-500 mb-2">
+              Paste a lead or opportunity id and Claude will render a 60-second brief from the
+              actual pipeline data.
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <input
+                className="input text-xs"
+                placeholder="opportunityId"
+                value={packetOppId}
+                onChange={(e) => setPacketOppId(e.target.value)}
+              />
+              <input
+                className="input text-xs"
+                placeholder="leadId"
+                value={packetLeadId}
+                onChange={(e) => setPacketLeadId(e.target.value)}
+              />
+            </div>
+            <button
+              className="btn-primary w-full justify-center"
+              onClick={generatePacket}
+              disabled={packetBusy || (!packetOppId.trim() && !packetLeadId.trim())}
+            >
+              {packetBusy ? 'Assembling…' : 'Generate packet'}
+            </button>
+            {packet && (
+              <pre className="text-xs bg-slate-50 rounded p-3 mt-3 overflow-auto max-h-80 whitespace-pre-wrap font-sans">
+                {packet}
+              </pre>
+            )}
           </div>
 
           {paths.length > 0 && (

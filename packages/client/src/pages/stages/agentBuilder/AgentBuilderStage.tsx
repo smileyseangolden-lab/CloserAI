@@ -1,8 +1,27 @@
 import { useEffect, useState } from 'react';
-import { Bot, Mail, Linkedin, MessageSquare, Send, Sparkles } from 'lucide-react';
+import { Bot, Mail, Linkedin, MessageSquare, Send, Sparkles, Users, Check } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
+
+interface CatalogAgent {
+  key: string;
+  name: string;
+  category: string;
+  agentType: string;
+  personalityStyle: string;
+  channels: string[];
+  description: string;
+  motions: string[];
+}
+
+type Motion = 'outbound_heavy' | 'inbound_heavy' | 'partner_driven' | 'plg';
+const MOTIONS: Array<{ value: Motion; label: string }> = [
+  { value: 'outbound_heavy', label: 'Outbound-heavy' },
+  { value: 'inbound_heavy', label: 'Inbound-heavy' },
+  { value: 'partner_driven', label: 'Partner-driven' },
+  { value: 'plg', label: 'PLG' },
+];
 
 interface AgentRow {
   id: string;
@@ -24,6 +43,10 @@ interface TestMessage {
 export function AgentBuilderStage() {
   const stage = STAGE_BY_ID['agent-builder']!;
   const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [catalog, setCatalog] = useState<CatalogAgent[]>([]);
+  const [motion, setMotion] = useState<Motion>('outbound_heavy');
+  const [recommendedKeys, setRecommendedKeys] = useState<Set<string>>(new Set());
+  const [activating, setActivating] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -34,6 +57,32 @@ export function AgentBuilderStage() {
       .catch(() => setAgents([]));
   }, [refreshKey]);
 
+  useEffect(() => {
+    void api
+      .get<CatalogAgent[]>('/agents/catalog')
+      .then(setCatalog)
+      .catch(() => setCatalog([]));
+  }, []);
+
+  useEffect(() => {
+    void api
+      .get<{ keys: string[] }>(`/agents/catalog/squad?motion=${motion}`)
+      .then((r) => setRecommendedKeys(new Set(r.keys)))
+      .catch(() => setRecommendedKeys(new Set()));
+  }, [motion]);
+
+  const activeNames = new Set(agents.map((a) => a.name));
+
+  async function activate(key: string) {
+    setActivating(key);
+    try {
+      await api.post(`/agents/catalog/${key}/activate`, {});
+      setRefreshKey((k) => k + 1);
+    } finally {
+      setActivating(null);
+    }
+  }
+
   return (
     <StepAssistant
       key={`ab-${refreshKey}`}
@@ -41,11 +90,74 @@ export function AgentBuilderStage() {
       onApproved={() => setRefreshKey((k) => k + 1)}
       sidePanel={
         <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+              <Users size={12} /> Squad catalog · {catalog.length} agents
+            </div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs text-slate-500">Motion:</span>
+              <select
+                className="input h-8 text-xs w-auto"
+                value={motion}
+                onChange={(e) => setMotion(e.target.value as Motion)}
+              >
+                {MOTIONS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-slate-400">
+                {recommendedKeys.size} recommended
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto">
+              {catalog.map((c) => {
+                const isActive = activeNames.has(c.name);
+                const isRecommended = recommendedKeys.has(c.key);
+                return (
+                  <div
+                    key={c.key}
+                    className={`rounded-lg border p-2.5 text-xs ${
+                      isActive
+                        ? 'border-emerald-200 bg-emerald-50/40'
+                        : isRecommended
+                          ? 'border-brand-200 bg-brand-50/30'
+                          : 'border-slate-200 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-1 mb-1">
+                      <div className="font-medium text-slate-900 truncate">{c.name}</div>
+                      {isRecommended && !isActive && (
+                        <span className="badge bg-brand-500 text-white text-[9px]">Rec</span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-500 capitalize mb-1">
+                      {c.category} · {c.channels.join('/')}
+                    </div>
+                    <div className="text-slate-600 line-clamp-2 mb-2">{c.description}</div>
+                    {isActive ? (
+                      <div className="flex items-center gap-1 text-emerald-700">
+                        <Check size={12} /> Active
+                      </div>
+                    ) : (
+                      <button
+                        className="btn-secondary text-xs w-full justify-center"
+                        disabled={activating === c.key}
+                        onClick={() => activate(c.key)}
+                      >
+                        {activating === c.key ? 'Activating…' : 'Activate'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
           {agents.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
               <div className="font-medium text-slate-700 mb-1">Canonical agents</div>
-              No agents yet. Approve a draft above and they’ll be written into{' '}
-              <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">agent_profiles</code>.
+              No agents yet. Activate from the squad catalog or approve a draft above.
             </div>
           ) : (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">

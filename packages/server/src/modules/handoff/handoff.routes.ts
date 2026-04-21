@@ -1,11 +1,20 @@
 import { Router } from 'express';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/index.js';
-import { escalationPaths, handoffRules } from '../../db/schema.js';
+import {
+  activities,
+  businessProfiles,
+  contacts,
+  escalationPaths,
+  handoffRules,
+  leads,
+  messages,
+  opportunities,
+} from '../../db/schema.js';
 import { validateBody } from '../../middleware/validate.js';
-import { NotFoundError } from '../../utils/errors.js';
-import { claudeJson } from '../ai/anthropic.js';
+import { NotFoundError, ValidationError } from '../../utils/errors.js';
+import { claude, claudeJson } from '../ai/anthropic.js';
 
 export const handoffRouter = Router();
 
@@ -193,3 +202,155 @@ handoffRouter.delete('/paths/:id', async (req, res, next) => {
     next(err);
   }
 });
+
+// ---- context packet generator ---------------------------------------------
+
+const packetSchema = z.object({
+  opportunityId: z.string().uuid().optional(),
+  leadId: z.string().uuid().optional(),
+  contactId: z.string().uuid().optional(),
+  ruleId: z.string().uuid().optional(),
+});
+
+/**
+ * Assemble a rep-ready context packet for a handoff. Pulls opportunity / lead
+ * / contact / recent-messages / recent-activities, then has Claude render the
+ * handoff_rules.contextPacketTemplate (if any) against that data into a
+ * single markdown brief the rep can read in under a minute.
+ */
+handoffRouter.post(
+  '/context-packet',
+  validateBody(packetSchema),
+  async (req, res, next) => {
+    try {
+      const orgId = req.auth!.organizationId;
+      const body = req.body as z.infer<typeof packetSchema>;
+      if (!body.opportunityId && !body.leadId) {
+        throw new ValidationError('Provide opportunityId or leadId');
+      }
+
+      let opp = null;
+      let lead = null;
+      let contact = null;
+
+      if (body.opportunityId) {
+        [opp] = await db
+          .select()
+          .from(opportunities)
+          .where(
+            and(eq(opportunities.id, body.opportunityId), eq(opportunities.organizationId, orgId)),
+          )
+          .limit(1);
+        if (opp) {
+          [lead] = await db
+            .select()
+            .from(leads)
+            .where(eq(leads.id, opp.leadId))
+            .limit(1);
+          [contact] = await db
+            .select()
+            .from(contacts)
+            .where(eq(contacts.id, opp.contactId))
+            .limit(1);
+        }
+      }
+      if (!lead && body.leadId) {
+        [lead] = await db
+          .select()
+          .from(leads)
+          .where(and(eq(leads.id, body.leadId), eq(leads.organizationId, orgId)))
+          .limit(1);
+      }
+      if (!contact && body.contactId) {
+        [contact] = await db
+          .select()
+          .from(contacts)
+          .where(and(eq(contacts.id, body.contactId), eq(contacts.organizationId, orgId)))
+          .limit(1);
+      }
+
+      if (!lead) throw new NotFoundError('Lead');
+
+      const recentMessages = contact
+        ? await db
+            .select()
+            .from(messages)
+            .where(
+              and(eq(messages.organizationId, orgId), eq(messages.contactId, contact.id)),
+            )
+            .orderBy(desc(messages.createdAt))
+            .limit(20)
+        : [];
+
+      const recentActivities = await db
+        .select()
+        .from(activities)
+        .where(and(eq(activities.organizationId, orgId), eq(activities.leadId, lead.id)))
+        .orderBy(desc(activities.createdAt))
+        .limit(20);
+
+      let rule = null;
+      if (body.ruleId) {
+        [rule] = await db
+          .select()
+          .from(handoffRules)
+          .where(and(eq(handoffRules.id, body.ruleId), eq(handoffRules.organizationId, orgId)))
+          .limit(1);
+      }
+
+      const [profile] = await db
+        .select()
+        .from(businessProfiles)
+        .where(eq(businessProfiles.organizationId, orgId))
+        .limit(1);
+
+      const template =
+        rule?.triggerConfig && typeof rule.triggerConfig === 'object'
+          ? (rule.triggerConfig as { contextPacketTemplate?: string }).contextPacketTemplate
+          : null;
+
+      const prompt = `You write rep-ready sales handoff packets. Produce a concise markdown brief a rep can absorb in 60 seconds. Include (in this order):
+  1. TL;DR (2 sentences)
+  2. Key facts (bullets: company, stage, value, timeline)
+  3. Decision-maker snapshot
+  4. Engagement history (what's been said, what worked)
+  5. Open questions / risks
+  6. Suggested next step
+
+Company context: ${JSON.stringify(profile ?? {}).slice(0, 1500)}
+Handoff rule: ${rule ? rule.naturalLanguageRule : '(generic)'}
+${template ? `Custom template instructions: ${template}` : ''}
+
+Opportunity: ${JSON.stringify(opp ?? null).slice(0, 1500)}
+Lead: ${JSON.stringify(lead).slice(0, 1500)}
+Contact: ${JSON.stringify(contact ?? null).slice(0, 1500)}
+
+Recent messages (newest first):
+${recentMessages
+  .map(
+    (m, i) =>
+      `${i + 1}. [${m.direction}/${m.channel}] ${m.subject ? `(${m.subject}) ` : ''}${m.bodyText.slice(0, 400)}`,
+  )
+  .join('\n')}
+
+Recent activities:
+${recentActivities.map((a) => `- ${a.activityType}: ${a.description ?? ''}`).join('\n')}
+
+Output just the markdown — no preamble.`;
+
+      const { text } = await claude(prompt, { orgId, maxTokens: 1500, temperature: 0.3 });
+      res.json({
+        packet: text,
+        context: {
+          opportunityId: opp?.id ?? null,
+          leadId: lead.id,
+          contactId: contact?.id ?? null,
+          ruleId: rule?.id ?? null,
+        },
+      });
+      void claudeJson; // reserved for future structured-packet variants
+    } catch (err) {
+      next(err);
+    }
+  },
+);

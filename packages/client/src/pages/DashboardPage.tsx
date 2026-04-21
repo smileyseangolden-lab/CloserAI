@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { ArrowRight, Circle, Mail, Target, Users } from 'lucide-react';
+import { ArrowRight, AlertTriangle, Circle, Mail, Target, TrendingDown, TrendingUp, Users } from 'lucide-react';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
 import { STAGES, STAGE_BY_ID } from '../workflow/stages';
@@ -53,9 +53,33 @@ interface StagesAnalytics {
   agents: Array<{ id: string; name: string; agentType: string; isActive: boolean }>;
 }
 
+interface Anomaly {
+  agentId: string;
+  agentName: string;
+  metric: 'reply_rate' | 'open_rate' | 'bounce_rate';
+  currentValue: number;
+  baselineValue: number;
+  relativeChange: number;
+  direction: 'up' | 'down';
+  severity: 'info' | 'warning' | 'critical';
+  sampleSize: number;
+}
+interface AnomaliesResponse {
+  anomalies: Anomaly[];
+}
+
 export function DashboardPage() {
   const [summary, setSummary] = useState<DashboardData | null>(null);
   const [stagesData, setStagesData] = useState<StagesAnalytics | null>(null);
+  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = sessionStorage.getItem('closerai.dismissedAnomalies');
+      return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
 
   useEffect(() => {
     void api.get<DashboardData>('/analytics/dashboard').then(setSummary).catch(() => setSummary(null));
@@ -63,7 +87,28 @@ export function DashboardPage() {
       .get<StagesAnalytics>('/analytics/stages')
       .then(setStagesData)
       .catch(() => setStagesData(null));
+    void api
+      .get<AnomaliesResponse>('/analytics/anomalies')
+      .then((r) => setAnomalies(r.anomalies))
+      .catch(() => setAnomalies([]));
   }, []);
+
+  const visibleAnomalies = anomalies.filter(
+    (a) => !dismissedIds.has(anomalyKey(a)) && a.severity !== 'info',
+  );
+
+  function dismiss(a: Anomaly) {
+    setDismissedIds((prev) => {
+      const next = new Set(prev);
+      next.add(anomalyKey(a));
+      try {
+        sessionStorage.setItem('closerai.dismissedAnomalies', JSON.stringify([...next]));
+      } catch {
+        // ignore quota errors
+      }
+      return next;
+    });
+  }
 
   const nextStage = useMemo(() => {
     if (!stagesData) return null;
@@ -82,6 +127,22 @@ export function DashboardPage() {
         title="Dashboard"
         subtitle="Workflow setup progress, agent performance by stage, and pipeline summary."
       />
+
+      {visibleAnomalies.length > 0 && (
+        <div className="mb-6 space-y-2">
+          {visibleAnomalies.slice(0, 3).map((a) => (
+            <AnomalyBanner key={anomalyKey(a)} anomaly={a} onDismiss={() => dismiss(a)} />
+          ))}
+          {visibleAnomalies.length > 3 && (
+            <Link
+              to="/stages/analytics"
+              className="text-xs text-brand-600 hover:text-brand-700 font-medium"
+            >
+              +{visibleAnomalies.length - 3} more anomalies — investigate in Analytics →
+            </Link>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
         <div className="card p-5 lg:col-span-2">
@@ -391,4 +452,49 @@ function summariseAgents(rows: AgentRow[]): string {
   const total = observed.reduce((a, r) => a + r.sent, 0);
   const repl = observed.reduce((a, r) => a + r.replied, 0);
   return `${observed.length} agents · ${total.toLocaleString()} sent · ${repl} replies`;
+}
+
+function anomalyKey(a: Anomaly): string {
+  return `${a.agentId}:${a.metric}:${a.direction}`;
+}
+
+function AnomalyBanner({ anomaly, onDismiss }: { anomaly: Anomaly; onDismiss: () => void }) {
+  const styles =
+    anomaly.severity === 'critical'
+      ? 'border-red-200 bg-red-50 text-red-900'
+      : 'border-amber-200 bg-amber-50 text-amber-900';
+  const Icon = anomaly.direction === 'up' ? TrendingUp : TrendingDown;
+  const metricLabel = anomaly.metric.replace(/_/g, ' ');
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const delta = (anomaly.relativeChange * 100).toFixed(0);
+  const deltaSign = anomaly.relativeChange > 0 ? '+' : '';
+
+  return (
+    <div className={`flex items-start gap-3 rounded-xl border p-4 ${styles}`}>
+      <div className="mt-0.5">
+        <AlertTriangle size={18} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Icon size={14} />
+          {anomaly.agentName} · {metricLabel} {deltaSign}
+          {delta}% week-over-week
+        </div>
+        <div className="text-xs mt-0.5">
+          Now {pct(anomaly.currentValue)} vs. {pct(anomaly.baselineValue)} the prior 7 days ·{' '}
+          {anomaly.sampleSize.toLocaleString()} sends.{' '}
+          <Link to="/stages/optimization" className="underline font-medium">
+            Propose a fix →
+          </Link>
+        </div>
+      </div>
+      <button
+        onClick={onDismiss}
+        className="text-xs text-slate-500 hover:text-slate-800 p-1"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+    </div>
+  );
 }
