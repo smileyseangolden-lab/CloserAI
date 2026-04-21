@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql as pgSql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, pool } from '../../db/index.js';
 import { customDashboards, savedQueries } from '../../db/schema.js';
@@ -164,6 +164,203 @@ queriesRouter.get('/dashboards', async (req, res, next) => {
     next(err);
   }
 });
+
+queriesRouter.get('/dashboards/:id', async (req, res, next) => {
+  try {
+    const [row] = await db
+      .select()
+      .from(customDashboards)
+      .where(
+        and(
+          eq(customDashboards.id, req.params.id!),
+          eq(customDashboards.organizationId, req.auth!.organizationId),
+        ),
+      )
+      .limit(1);
+    if (!row) throw new NotFoundError('Dashboard');
+    res.json(row);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Resolves live data for every widget in the dashboard layout and returns a
+ * widget-id → data map. Keeps the client simple: the builder just renders
+ * what comes back, no per-widget fetch logic in React.
+ */
+queriesRouter.post('/dashboards/:id/data', async (req, res, next) => {
+  try {
+    const [dash] = await db
+      .select()
+      .from(customDashboards)
+      .where(
+        and(
+          eq(customDashboards.id, req.params.id!),
+          eq(customDashboards.organizationId, req.auth!.organizationId),
+        ),
+      )
+      .limit(1);
+    if (!dash) throw new NotFoundError('Dashboard');
+
+    const layout = Array.isArray(dash.layout) ? (dash.layout as WidgetLayout[]) : [];
+    const out: Record<string, unknown> = {};
+
+    for (const widget of layout) {
+      try {
+        out[widget.id] = await resolveWidget(widget, req.auth!.organizationId);
+      } catch (err) {
+        out[widget.id] = { error: err instanceof Error ? err.message : 'Widget failed' };
+      }
+    }
+
+    res.json({ data: out });
+  } catch (err) {
+    next(err);
+  }
+});
+
+interface WidgetLayout {
+  id: string;
+  type: 'saved_query' | 'stat_card' | 'stage_progress' | 'anomalies';
+  title?: string;
+  savedQueryId?: string;
+  metric?: 'outbound_sent' | 'replies' | 'open_pipeline' | 'won_pipeline';
+  size?: 'small' | 'medium' | 'large';
+}
+
+async function resolveWidget(widget: WidgetLayout, orgId: string): Promise<unknown> {
+  switch (widget.type) {
+    case 'saved_query': {
+      if (!widget.savedQueryId) return { rows: [], note: 'No saved query linked' };
+      const [q] = await db
+        .select()
+        .from(savedQueries)
+        .where(
+          and(
+            eq(savedQueries.id, widget.savedQueryId),
+            eq(savedQueries.organizationId, orgId),
+          ),
+        )
+        .limit(1);
+      if (!q) return { error: 'Saved query not found' };
+      if (!q.generatedSql) return { rows: [], note: 'Query has no SQL' };
+      assertSafeSql(q.generatedSql);
+      const result = await runReadOnly(q.generatedSql);
+      await db
+        .update(savedQueries)
+        .set({
+          lastRunAt: new Date(),
+          lastResultCount: result.rows.length,
+          lastResult: result.rows.slice(0, 50),
+        })
+        .where(eq(savedQueries.id, q.id));
+      return {
+        name: q.name,
+        sql: q.generatedSql,
+        rows: result.rows.slice(0, 50),
+        rowCount: result.rowCount,
+      };
+    }
+    case 'stat_card': {
+      return resolveStatCard(widget.metric ?? 'outbound_sent', orgId);
+    }
+    case 'stage_progress': {
+      // Re-use /analytics/stages logic via a direct import would be cleaner,
+      // but keeping widgets self-contained keeps the data-resolver tight.
+      const { workspaceStages } = await import('../../db/schema.js');
+      const rows = await db
+        .select({ stageId: workspaceStages.stageId, status: workspaceStages.status })
+        .from(workspaceStages)
+        .where(eq(workspaceStages.organizationId, orgId));
+      return { stages: rows };
+    }
+    case 'anomalies': {
+      // Small convenience: call analytics module's inline logic path.
+      const { agentProfiles: agentsTable, messages: msgsTable } = await import(
+        '../../db/schema.js'
+      );
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const rows = await db
+        .select({
+          agentId: msgsTable.agentId,
+          sent: pgSql<number>`count(*) filter (where ${msgsTable.direction} = 'outbound')`,
+          replied: pgSql<number>`count(*) filter (where ${msgsTable.repliedAt} is not null)`,
+        })
+        .from(msgsTable)
+        .where(
+          and(
+            eq(msgsTable.organizationId, orgId),
+            pgSql`${msgsTable.createdAt} >= ${sevenDaysAgo}`,
+          ),
+        )
+        .groupBy(msgsTable.agentId);
+      const agents = await db
+        .select({ id: agentsTable.id, name: agentsTable.name })
+        .from(agentsTable)
+        .where(eq(agentsTable.organizationId, orgId));
+      const nameById = new Map(agents.map((a) => [a.id, a.name]));
+      return {
+        items: rows
+          .filter((r) => r.agentId && Number(r.sent) >= 10)
+          .map((r) => ({
+            agentId: r.agentId,
+            agentName: nameById.get(r.agentId as string) ?? 'Unknown',
+            sent: Number(r.sent),
+            replyRate:
+              Number(r.sent) > 0 ? Number(r.replied) / Number(r.sent) : 0,
+          })),
+      };
+    }
+    default:
+      return { error: 'Unknown widget type' };
+  }
+}
+
+async function resolveStatCard(
+  metric: NonNullable<WidgetLayout['metric']>,
+  orgId: string,
+): Promise<{ metric: string; value: number; label: string }> {
+  const { messages: msgsTable, opportunities: oppsTable } = await import('../../db/schema.js');
+  switch (metric) {
+    case 'outbound_sent': {
+      const [row] = await db
+        .select({
+          n: pgSql<number>`count(*) filter (where ${msgsTable.direction} = 'outbound')`,
+        })
+        .from(msgsTable)
+        .where(eq(msgsTable.organizationId, orgId));
+      return { metric, value: Number(row?.n ?? 0), label: 'Outbound sent (all time)' };
+    }
+    case 'replies': {
+      const [row] = await db
+        .select({
+          n: pgSql<number>`count(*) filter (where ${msgsTable.repliedAt} is not null)`,
+        })
+        .from(msgsTable)
+        .where(eq(msgsTable.organizationId, orgId));
+      return { metric, value: Number(row?.n ?? 0), label: 'Replies (all time)' };
+    }
+    case 'open_pipeline': {
+      const [row] = await db
+        .select({
+          n: pgSql<number>`coalesce(sum(${oppsTable.estimatedValue}) filter (where ${oppsTable.stage} not in ('closed_won','closed_lost')), 0)`,
+        })
+        .from(oppsTable)
+        .where(eq(oppsTable.organizationId, orgId));
+      return { metric, value: Number(row?.n ?? 0), label: 'Open pipeline ($)' };
+    }
+    case 'won_pipeline': {
+      const [row] = await db
+        .select({
+          n: pgSql<number>`coalesce(sum(${oppsTable.estimatedValue}) filter (where ${oppsTable.stage} = 'closed_won'), 0)`,
+        })
+        .from(oppsTable)
+        .where(eq(oppsTable.organizationId, orgId));
+      return { metric, value: Number(row?.n ?? 0), label: 'Won pipeline ($)' };
+    }
+  }
+}
 
 queriesRouter.post('/dashboards', validateBody(dashboardSchema), async (req, res, next) => {
   try {

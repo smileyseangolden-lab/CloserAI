@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Database, Play, Save, Trash2 } from 'lucide-react';
+import { Link } from 'react-router';
+import { BarChart3, Database, LayoutDashboard, Play, Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
@@ -12,6 +13,13 @@ interface SavedQueryRow {
   generatedSql: string | null;
   lastRunAt: string | null;
   lastResultCount: number | null;
+}
+
+interface DashboardRow {
+  id: string;
+  name: string;
+  description: string | null;
+  layout: unknown[];
 }
 
 interface AskResult {
@@ -28,6 +36,7 @@ export function AnalyticsStage() {
   const [result, setResult] = useState<AskResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedQueryRow[]>([]);
+  const [dashboards, setDashboards] = useState<DashboardRow[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -35,7 +44,24 @@ export function AnalyticsStage() {
       .get<SavedQueryRow[]>('/queries')
       .then(setSaved)
       .catch(() => setSaved([]));
+    void api
+      .get<DashboardRow[]>('/queries/dashboards')
+      .then(setDashboards)
+      .catch(() => setDashboards([]));
   }, [refreshKey]);
+
+  async function createDashboard() {
+    const name = prompt('Dashboard name?', 'New dashboard');
+    if (!name) return;
+    const r = await api.post<DashboardRow>('/queries/dashboards', { name, layout: [] });
+    window.location.href = `/dashboards/${r.id}`;
+  }
+
+  async function removeDashboard(id: string) {
+    if (!confirm('Delete this dashboard?')) return;
+    await api.delete(`/queries/dashboards/${id}`);
+    setRefreshKey((k) => k + 1);
+  }
 
   async function ask() {
     if (!question.trim()) return;
@@ -140,6 +166,50 @@ export function AnalyticsStage() {
               <ResultTable rows={result.rows} />
             </div>
           )}
+
+          <div className="rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide">
+                <LayoutDashboard size={12} /> Dashboards · {dashboards.length}
+              </div>
+              <button className="btn-secondary text-xs" onClick={createDashboard}>
+                <Plus size={12} /> New
+              </button>
+            </div>
+            {dashboards.length === 0 ? (
+              <div className="text-xs text-slate-400">
+                Build a dashboard by dragging widgets (stat cards, saved queries, stage
+                progress, agent anomalies) onto a grid.
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {dashboards.map((d) => (
+                  <div
+                    key={d.id}
+                    className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2"
+                  >
+                    <Link
+                      to={`/dashboards/${d.id}`}
+                      className="flex-1 min-w-0 text-sm font-medium truncate hover:text-brand-700"
+                    >
+                      <BarChart3 size={12} className="inline mr-1 text-slate-400" />
+                      {d.name}
+                      <span className="text-xs text-slate-400 ml-2">
+                        {d.layout.length} widgets
+                      </span>
+                    </Link>
+                    <button
+                      onClick={() => removeDashboard(d.id)}
+                      className="text-slate-300 hover:text-red-500 p-1"
+                      aria-label="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="rounded-xl border border-slate-200 p-4">
             <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">

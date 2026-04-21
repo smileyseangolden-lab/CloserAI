@@ -18,6 +18,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { CrmCallbackPage } from './pages/oauth/CrmCallbackPage';
+import { DashboardBuilderPage } from './pages/dashboards/DashboardBuilderPage';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const user = useAuthStore((s) => s.user);
@@ -57,6 +58,7 @@ export default function App() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="dashboards/:id" element={<DashboardBuilderPage />} />
         <Route path="stages/:stageId" element={<StagePage />} />
 
         {/* Legacy routes — kept reachable from deep links and the workflow pages. */}
