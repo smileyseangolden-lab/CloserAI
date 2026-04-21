@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Send, Sparkles, Check, RotateCcw, User, Bot } from 'lucide-react';
 import { api } from '../../api/client';
@@ -25,13 +26,29 @@ interface ChatResponse {
   userMessage: AssistantMessage;
   assistantMessage: AssistantMessage;
   proposedDraft: Record<string, unknown> | null;
+  toolTrace?: Array<{ name: string; input: unknown; result: string }>;
+  model?: string;
 }
 
 interface Props {
   stage: StageDefinition;
+  /** Optional canonical-table panel rendered below the live preview. */
+  sidePanel?: ReactNode;
+  /** Stage-specific quick actions in the header (e.g. "Analyze my website"). */
+  headerActions?: ReactNode;
+  /** Called when the assistant returns a new draft so a parent can reflect changes. */
+  onDraftChanged?: (draft: Record<string, unknown>) => void;
+  /** Called when the user approves the stage so a parent can refresh canonical data. */
+  onApproved?: () => void;
 }
 
-export function StepAssistant({ stage }: Props) {
+export function StepAssistant({
+  stage,
+  sidePanel,
+  headerActions,
+  onDraftChanged,
+  onApproved,
+}: Props) {
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [status, setStatus] = useState<WorkspaceStage['status']>('in_progress');
@@ -99,7 +116,11 @@ export function StepAssistant({ stage }: Props) {
         return [...withoutOptimistic, res.userMessage, res.assistantMessage];
       });
       if (res.proposedDraft) {
-        setDraft((prev) => ({ ...prev, ...res.proposedDraft }));
+        setDraft((prev) => {
+          const next = { ...prev, ...res.proposedDraft };
+          onDraftChanged?.(next);
+          return next;
+        });
       }
     } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
@@ -119,6 +140,7 @@ export function StepAssistant({ stage }: Props) {
       });
       setStatus(ws.status);
       setVersion(ws.version);
+      if (nextStatus === 'approved') onApproved?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
@@ -157,6 +179,7 @@ export function StepAssistant({ stage }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {headerActions}
           <button
             className="btn-secondary"
             onClick={resetConversation}
@@ -256,6 +279,9 @@ export function StepAssistant({ stage }: Props) {
               knownKeys={new Set(stage.draftFields.map((f) => f.key))}
               onChange={setDraft}
             />
+            {sidePanel && (
+              <div className="pt-4 border-t border-slate-200">{sidePanel}</div>
+            )}
           </div>
         </section>
       </div>
