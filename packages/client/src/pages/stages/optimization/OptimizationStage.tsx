@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Wand2, Beaker, Check, X, Play, StopCircle } from 'lucide-react';
+import { Wand2, Beaker, Check, X, Play, StopCircle, Power, Zap } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
@@ -32,10 +32,17 @@ interface ExperimentRow {
   targetSampleSize: number;
 }
 
+interface SchedulerState {
+  enabled: boolean;
+  lastProposalAt: string | null;
+}
+
 export function OptimizationStage() {
   const stage = STAGE_BY_ID['optimization']!;
   const [proposals, setProposals] = useState<ProposalRow[]>([]);
   const [experiments, setExperiments] = useState<ExperimentRow[]>([]);
+  const [scheduler, setScheduler] = useState<SchedulerState | null>(null);
+  const [runBusy, setRunBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [tab, setTab] = useState<'proposals' | 'experiments'>('proposals');
 
@@ -43,13 +50,33 @@ export function OptimizationStage() {
     void Promise.all([
       api.get<ProposalRow[]>('/optimization/proposals'),
       api.get<ExperimentRow[]>('/optimization/experiments'),
+      api.get<SchedulerState>('/optimization/scheduler'),
     ])
-      .then(([p, e]) => {
+      .then(([p, e, s]) => {
         setProposals(p);
         setExperiments(e);
+        setScheduler(s);
       })
       .catch(() => undefined);
   }, [refreshKey]);
+
+  async function toggleScheduler() {
+    if (!scheduler) return;
+    const next = !scheduler.enabled;
+    setScheduler({ ...scheduler, enabled: next });
+    await api.patch('/optimization/scheduler', { enabled: next });
+  }
+
+  async function runNow() {
+    setRunBusy(true);
+    try {
+      await api.post('/optimization/scheduler/run-now', {});
+      // Give the worker ~20s to produce proposals, then refetch.
+      setTimeout(() => setRefreshKey((k) => k + 1), 20_000);
+    } finally {
+      setRunBusy(false);
+    }
+  }
 
   async function approve(id: string) {
     await api.post(`/optimization/proposals/${id}/approve`, {});
@@ -82,6 +109,45 @@ export function OptimizationStage() {
       onApproved={() => setRefreshKey((k) => k + 1)}
       sidePanel={
         <div className="space-y-4">
+          {scheduler && (
+            <div className="rounded-xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                    <Power size={12} /> Continuous optimization
+                  </div>
+                  <div className="text-sm text-slate-700 mt-1">
+                    {scheduler.enabled
+                      ? 'Running every ~6 hours — proposals drop here automatically.'
+                      : 'Paused — enable to let the scheduler propose changes for you.'}
+                  </div>
+                  {scheduler.lastProposalAt && (
+                    <div className="text-xs text-slate-500 mt-1">
+                      last proposal {new Date(scheduler.lastProposalAt).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+                <button
+                  className={`btn-secondary text-xs ${
+                    scheduler.enabled ? 'text-emerald-700 border-emerald-200' : ''
+                  }`}
+                  onClick={toggleScheduler}
+                >
+                  {scheduler.enabled ? 'On' : 'Off'}
+                </button>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button
+                  className="btn-primary text-xs w-full justify-center"
+                  disabled={runBusy}
+                  onClick={runNow}
+                >
+                  <Zap size={12} /> {runBusy ? 'Queued…' : 'Run analysis now'}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-1 border-b border-slate-200 -mb-px">
             <TabBtn active={tab === 'proposals'} onClick={() => setTab('proposals')}>
               <Wand2 size={12} /> Proposals

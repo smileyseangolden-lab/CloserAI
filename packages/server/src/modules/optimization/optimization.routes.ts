@@ -8,11 +8,13 @@ import {
   experiments,
   idealCustomerProfiles,
   optimizationProposals,
+  organizations,
 } from '../../db/schema.js';
 import { validateBody } from '../../middleware/validate.js';
 import { NotFoundError, ValidationError } from '../../utils/errors.js';
 import { embedAndStoreKnowledgeEntry } from '../ai/orgKnowledge.js';
 import { logger } from '../../utils/logger.js';
+import { optimizationQueue } from '../../jobs/queue.js';
 
 export const optimizationRouter = Router();
 
@@ -291,6 +293,77 @@ optimizationRouter.post(
     }
   },
 );
+
+// ---- scheduler toggle + run-now -------------------------------------------
+
+optimizationRouter.get('/scheduler', async (req, res, next) => {
+  try {
+    const [org] = await db
+      .select({ settings: organizations.settings })
+      .from(organizations)
+      .where(eq(organizations.id, req.auth!.organizationId))
+      .limit(1);
+    const settings = (org?.settings ?? {}) as Record<string, unknown>;
+    res.json({
+      enabled: settings.optimizationSchedulerEnabled !== false,
+      lastProposalAt: await lastProposalAt(req.auth!.organizationId),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const toggleSchema = z.object({ enabled: z.boolean() });
+
+optimizationRouter.patch(
+  '/scheduler',
+  validateBody(toggleSchema),
+  async (req, res, next) => {
+    try {
+      const [org] = await db
+        .select({ settings: organizations.settings })
+        .from(organizations)
+        .where(eq(organizations.id, req.auth!.organizationId))
+        .limit(1);
+      const settings = ((org?.settings ?? {}) as Record<string, unknown>) ?? {};
+      settings.optimizationSchedulerEnabled = req.body.enabled;
+      await db
+        .update(organizations)
+        .set({ settings, updatedAt: new Date() })
+        .where(eq(organizations.id, req.auth!.organizationId));
+      res.json({ enabled: req.body.enabled });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+optimizationRouter.post('/scheduler/run-now', async (req, res, next) => {
+  try {
+    await optimizationQueue.add(
+      'analyze_optimization',
+      { organizationId: req.auth!.organizationId },
+      {
+        removeOnComplete: true,
+        attempts: 1,
+        jobId: `opt:${req.auth!.organizationId}:manual:${Date.now()}`,
+      },
+    );
+    res.status(202).json({ queued: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+async function lastProposalAt(orgId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ createdAt: optimizationProposals.createdAt })
+    .from(optimizationProposals)
+    .where(eq(optimizationProposals.organizationId, orgId))
+    .orderBy(desc(optimizationProposals.createdAt))
+    .limit(1);
+  return row ? row.createdAt.toISOString() : null;
+}
 
 // ---- helpers --------------------------------------------------------------
 
