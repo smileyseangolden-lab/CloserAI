@@ -76,6 +76,13 @@ const envSchema = z.object({
 
   // How often the optimization scheduler runs (minutes). 0 disables it.
   OPTIMIZATION_SCHEDULER_INTERVAL_MIN: z.coerce.number().default(360),
+
+  // How often the campaign tick looks for due cadence steps (milliseconds).
+  // 0 disables the scheduler (useful in tests / one-off envs).
+  CAMPAIGN_SCHEDULER_INTERVAL_MS: z.coerce.number().default(30_000),
+
+  // How often the manager agents tick looks for due managers (milliseconds).
+  MANAGER_SCHEDULER_INTERVAL_MS: z.coerce.number().default(600_000),
 });
 
 export const env = envSchema.parse(process.env);

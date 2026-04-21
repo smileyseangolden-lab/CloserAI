@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import type { Job } from 'bullmq';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../../db/index.js';
-import { messages, contacts, activities, emailAccounts } from '../../db/schema.js';
+import { messages, contacts, activities, emailAccounts, organizations } from '../../db/schema.js';
 import { logger } from '../../utils/logger.js';
 import { env } from '../../config/env.js';
 import { getEmailProvider } from '../../integrations/email/index.js';
@@ -27,6 +27,19 @@ export async function processSendJob(job: Job<SendJobData>) {
   if (!msg) {
     logger.warn({ messageId }, 'Message not found');
     return;
+  }
+
+  // Respect the org-wide pause-outbound kill switch. We requeue the job with
+  // a short delay so work resumes automatically when the flag is cleared.
+  const [org] = await db
+    .select({ settings: organizations.settings })
+    .from(organizations)
+    .where(eq(organizations.id, msg.organizationId))
+    .limit(1);
+  const orgSettings = (org?.settings ?? {}) as Record<string, unknown>;
+  if (orgSettings.pauseOutbound === true) {
+    logger.info({ messageId }, 'Skipping send — org outbound is paused');
+    throw new Error('Org outbound paused');
   }
 
   const [contact] = await db.select().from(contacts).where(eq(contacts.id, msg.contactId)).limit(1);

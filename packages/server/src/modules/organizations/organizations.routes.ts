@@ -49,3 +49,70 @@ organizationsRouter.patch(
     }
   },
 );
+
+/**
+ * Org-wide outbound pause switch. When on, the campaign scheduler skips every
+ * campaign_leads row belonging to this org on each tick, effectively freezing
+ * all outbound without pausing individual campaigns / deployments.
+ */
+const pauseSchema = z.object({
+  paused: z.boolean(),
+  reason: z.string().max(500).optional(),
+});
+
+organizationsRouter.patch(
+  '/current/pause-outbound',
+  requireRole('owner', 'admin', 'manager'),
+  validateBody(pauseSchema),
+  async (req, res, next) => {
+    try {
+      const [org] = await db
+        .select()
+        .from(organizations)
+        .where(eq(organizations.id, req.auth!.organizationId))
+        .limit(1);
+      if (!org) throw new NotFoundError('Organization');
+      const settings = ((org.settings ?? {}) as Record<string, unknown>) ?? {};
+      settings.pauseOutbound = req.body.paused;
+      if (req.body.paused) {
+        settings.pausedAt = new Date().toISOString();
+        settings.pausedByUserId = req.auth!.userId;
+        settings.pauseReason = req.body.reason ?? null;
+      } else {
+        delete settings.pausedAt;
+        delete settings.pausedByUserId;
+        delete settings.pauseReason;
+      }
+      await db
+        .update(organizations)
+        .set({ settings, updatedAt: new Date() })
+        .where(eq(organizations.id, req.auth!.organizationId));
+      res.json({
+        paused: req.body.paused,
+        pausedAt: settings.pausedAt ?? null,
+        pauseReason: settings.pauseReason ?? null,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+organizationsRouter.get('/current/pause-outbound', async (req, res, next) => {
+  try {
+    const [org] = await db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.id, req.auth!.organizationId))
+      .limit(1);
+    if (!org) throw new NotFoundError('Organization');
+    const settings = (org.settings ?? {}) as Record<string, unknown>;
+    res.json({
+      paused: settings.pauseOutbound === true,
+      pausedAt: (settings.pausedAt as string) ?? null,
+      pauseReason: (settings.pauseReason as string) ?? null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});

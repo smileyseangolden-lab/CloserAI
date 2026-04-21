@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
-import { LayoutDashboard, LogOut, Plug, CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import { LayoutDashboard, LogOut, Plug, CheckCircle2, Circle, Loader2, AlertOctagon, Play } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth';
 import { STAGES } from '../../workflow/stages';
 import { api } from '../../api/client';
@@ -11,22 +11,53 @@ interface WorkspaceStage {
   version: number;
 }
 
+interface PauseState {
+  paused: boolean;
+  pausedAt: string | null;
+  pauseReason: string | null;
+}
+
 export function AppLayout() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const [stages, setStages] = useState<WorkspaceStage[]>([]);
+  const [pause, setPause] = useState<PauseState | null>(null);
 
   useEffect(() => {
     void api.get<WorkspaceStage[]>('/workspace').then(setStages).catch(() => setStages([]));
+    void api
+      .get<PauseState>('/organizations/current/pause-outbound')
+      .then(setPause)
+      .catch(() => setPause(null));
 
-    const onFocus = () => void api.get<WorkspaceStage[]>('/workspace').then(setStages).catch(() => {});
+    const onFocus = () => {
+      void api.get<WorkspaceStage[]>('/workspace').then(setStages).catch(() => {});
+      void api
+        .get<PauseState>('/organizations/current/pause-outbound')
+        .then(setPause)
+        .catch(() => {});
+    };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
+  async function togglePause() {
+    const nextPaused = !(pause?.paused ?? false);
+    const reason =
+      nextPaused
+        ? prompt('Optional reason for pausing all outbound?') ?? undefined
+        : undefined;
+    const r = await api.patch<PauseState>('/organizations/current/pause-outbound', {
+      paused: nextPaused,
+      reason,
+    });
+    setPause(r);
+  }
+
   const statusMap = new Map(stages.map((s) => [s.stageId, s.status]));
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
+  const canPause = isAdmin || user?.role === 'manager';
 
   return (
     <div className="flex h-screen bg-slate-50">
@@ -117,6 +148,23 @@ export function AppLayout() {
           )}
         </nav>
 
+        {canPause && (
+          <div className="px-3 pt-2 pb-2 border-t border-slate-200">
+            <button
+              onClick={togglePause}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                pause?.paused
+                  ? 'bg-red-50 text-red-700 hover:bg-red-100'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+              title={pause?.paused ? 'Resume all outbound' : 'Pause all outbound (org-wide)'}
+            >
+              {pause?.paused ? <Play size={16} /> : <AlertOctagon size={16} />}
+              {pause?.paused ? 'Resume outbound' : 'Pause all outbound'}
+            </button>
+          </div>
+        )}
+
         <div className="p-3 border-t border-slate-200">
           <div className="flex items-center gap-3 px-3 py-2">
             <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold">
@@ -143,6 +191,28 @@ export function AppLayout() {
       </aside>
 
       <main className="flex-1 overflow-auto">
+        {pause?.paused && (
+          <div className="bg-red-600 text-white px-6 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <AlertOctagon size={16} />
+              <span className="font-semibold">All outbound is paused.</span>
+              {pause.pauseReason && <span className="opacity-90">— {pause.pauseReason}</span>}
+              {pause.pausedAt && (
+                <span className="opacity-75 text-xs">
+                  since {new Date(pause.pausedAt).toLocaleString()}
+                </span>
+              )}
+            </div>
+            {canPause && (
+              <button
+                onClick={togglePause}
+                className="text-xs px-3 py-1 rounded-full bg-white text-red-700 font-semibold hover:bg-red-50"
+              >
+                Resume
+              </button>
+            )}
+          </div>
+        )}
         <Outlet />
       </main>
     </div>
