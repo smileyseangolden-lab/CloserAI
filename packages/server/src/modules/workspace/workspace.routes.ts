@@ -6,6 +6,7 @@ import { workspaceStages } from '../../db/schema.js';
 import { validateBody } from '../../middleware/validate.js';
 import { NotFoundError, ValidationError } from '../../utils/errors.js';
 import { STAGE_DEFINITIONS, isValidStageId } from './workspace.stages.js';
+import { propagateApprovedStage } from './stageApproval.js';
 
 export const workspaceRouter = Router();
 
@@ -81,6 +82,7 @@ workspaceRouter.put('/:stageId', validateBody(saveSchema), async (req, res, next
       )
       .limit(1);
 
+    let result;
     if (existing) {
       const [updated] = await db
         .update(workspaceStages)
@@ -94,21 +96,31 @@ workspaceRouter.put('/:stageId', validateBody(saveSchema), async (req, res, next
         })
         .where(eq(workspaceStages.id, existing.id))
         .returning();
-      return res.json(updated);
+      result = updated;
+    } else {
+      const [created] = await db
+        .insert(workspaceStages)
+        .values({
+          organizationId: orgId,
+          stageId,
+          data: req.body.data,
+          status,
+          approvedAt,
+          updatedByUserId: req.auth!.userId,
+        })
+        .returning();
+      result = created;
     }
 
-    const [created] = await db
-      .insert(workspaceStages)
-      .values({
+    if (status === 'approved') {
+      await propagateApprovedStage(stageId, {
         organizationId: orgId,
-        stageId,
-        data: req.body.data,
-        status,
-        approvedAt,
-        updatedByUserId: req.auth!.userId,
-      })
-      .returning();
-    res.status(201).json(created);
+        userId: req.auth!.userId,
+        draft: req.body.data,
+      });
+    }
+
+    res.status(existing ? 200 : 201).json(result);
   } catch (err) {
     next(err);
   }

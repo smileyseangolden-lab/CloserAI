@@ -319,6 +319,108 @@ export const assistantMessageRoleEnum = pgEnum('assistant_message_role', [
   'assistant',
 ]);
 
+// ---- Stage-specific enums ---------------------------------------------------
+
+export const dataSourceTierEnum = pgEnum('data_source_tier', [
+  'starter',
+  'scale',
+  'enterprise',
+]);
+
+export const dataSourceStatusEnum = pgEnum('data_source_status', [
+  'recommended',
+  'connected',
+  'skipped',
+  'error',
+]);
+
+export const valuePropVariantEnum = pgEnum('value_prop_variant', [
+  'technical',
+  'business_outcome',
+  'emotional',
+]);
+
+export const knowledgeSourceEnum = pgEnum('knowledge_source', [
+  'document',
+  'url',
+  'pasted',
+  'email',
+  'battlecard',
+  'faq',
+  'objection_playbook',
+  'website',
+  'call_transcript',
+]);
+
+export const deploymentStatusEnum = pgEnum('deployment_status', [
+  'draft',
+  'pending_pilot',
+  'live',
+  'paused',
+  'completed',
+]);
+
+export const complianceJurisdictionEnum = pgEnum('compliance_jurisdiction', [
+  'us_can_spam',
+  'eu_gdpr',
+  'us_ccpa',
+  'linkedin_tos',
+  'custom',
+]);
+
+export const pilotStatusEnum = pgEnum('pilot_status', [
+  'pending',
+  'running',
+  'ready_for_review',
+  'approved',
+  'blocked',
+]);
+
+export const pilotVerdictEnum = pgEnum('pilot_verdict', [
+  'ok',
+  'off_brand',
+  'off_topic',
+  'non_compliant',
+  'needs_edit',
+]);
+
+export const goNoGoEnum = pgEnum('go_no_go', ['go', 'no_go']);
+
+export const escalationRoleEnum = pgEnum('escalation_role', [
+  'am',
+  'ae',
+  'sales_lead',
+  'success',
+  'support',
+  'custom',
+]);
+
+export const proposalTypeEnum = pgEnum('proposal_type', [
+  'agent_prompt_change',
+  'knowledge_add',
+  'knowledge_edit',
+  'icp_targeting_change',
+  'cadence_change',
+  'value_prop_change',
+  'data_source_change',
+]);
+
+export const proposalStatusEnum = pgEnum('proposal_status', [
+  'pending',
+  'approved',
+  'dismissed',
+  'applied',
+]);
+
+export const experimentStatusEnum = pgEnum('experiment_status', [
+  'draft',
+  'running',
+  'completed',
+  'stopped',
+]);
+
+export const experimentVariantEnum = pgEnum('experiment_variant', ['A', 'B']);
+
 // =====================================================================
 // CORE ENTITIES
 // =====================================================================
@@ -993,6 +1095,384 @@ export const assistantMessages = pgTable(
 );
 
 // =====================================================================
+// STAGE 2: DATA SOURCES
+// =====================================================================
+
+export const dataSources = pgTable(
+  'data_sources',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    providerKey: text('provider_key').notNull(),
+    providerName: text('provider_name').notNull(),
+    category: text('category').notNull().default('enrichment'),
+    tier: dataSourceTierEnum('tier').notNull().default('starter'),
+    status: dataSourceStatusEnum('status').notNull().default('recommended'),
+    monthlyBudgetUsd: decimal('monthly_budget_usd', { precision: 10, scale: 2 }),
+    estimatedMonthlyCostUsd: decimal('estimated_monthly_cost_usd', {
+      precision: 10,
+      scale: 2,
+    }),
+    enrichmentRules: jsonb('enrichment_rules').default(sql`'{}'::jsonb`),
+    reasoning: text('reasoning'),
+    credentialsProviderKey: text('credentials_provider_key'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    orgProviderUnique: uniqueIndex('data_sources_org_provider_unique').on(
+      t.organizationId,
+      t.providerKey,
+    ),
+  }),
+);
+
+// =====================================================================
+// STAGE 5: VALUE PROP, PRICING, COMPETITIVE INTEL
+// =====================================================================
+
+export const valueProps = pgTable(
+  'value_props',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    variant: valuePropVariantEnum('variant').notNull(),
+    headline: text('headline').notNull(),
+    body: text('body').notNull(),
+    proofPoints: text('proof_points').array(),
+    targetPersona: text('target_persona'),
+    icpTierId: uuid('icp_tier_id').references(() => idealCustomerProfiles.id, {
+      onDelete: 'set null',
+    }),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    orgVariantIdx: index('idx_value_props_org_variant').on(t.organizationId, t.variant),
+  }),
+);
+
+export const pricingTiers = pgTable('pricing_tiers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  priceMonthly: decimal('price_monthly', { precision: 12, scale: 2 }),
+  priceAnnual: decimal('price_annual', { precision: 12, scale: 2 }),
+  currency: varchar('currency', { length: 3 }).notNull().default('USD'),
+  features: text('features').array(),
+  targetSegment: text('target_segment'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const competitiveMatrix = pgTable('competitive_matrix', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  competitor: text('competitor').notNull(),
+  competitorUrl: text('competitor_url'),
+  ourStrengths: text('our_strengths').array(),
+  theirStrengths: text('their_strengths').array(),
+  differentiators: text('differentiators').array(),
+  pricingNotes: text('pricing_notes'),
+  sourceUrls: text('source_urls').array(),
+  g2Rating: real('g2_rating'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// =====================================================================
+// STAGE 6: ORG-WIDE KNOWLEDGE BASE (RAG)
+// =====================================================================
+
+export const knowledgeBase = pgTable(
+  'knowledge_base',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    source: knowledgeSourceEnum('source').notNull(),
+    title: text('title').notNull(),
+    content: text('content').notNull(),
+    sourceUrl: text('source_url'),
+    fileMimeType: text('file_mime_type'),
+    brandVoiceTags: text('brand_voice_tags').array(),
+    tags: text('tags').array(),
+    embedding: vector('embedding', { dimensions: EMBEDDING_DIMENSIONS }),
+    embeddingModel: text('embedding_model'),
+    embeddedAt: timestamp('embedded_at'),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    orgActiveIdx: index('idx_knowledge_base_org_active').on(t.organizationId, t.isActive),
+  }),
+);
+
+// =====================================================================
+// STAGE 7: DEPLOYMENTS + COMPLIANCE
+// =====================================================================
+
+export const deployments = pgTable('deployments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  assignedAgentIds: uuid('assigned_agent_ids').array(),
+  icpTierIds: uuid('icp_tier_ids').array(),
+  campaignIds: uuid('campaign_ids').array(),
+  status: deploymentStatusEnum('status').notNull().default('draft'),
+  killSwitchActivatedAt: timestamp('kill_switch_activated_at'),
+  killSwitchActivatedBy: uuid('kill_switch_activated_by').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  launchedAt: timestamp('launched_at'),
+  settings: jsonb('settings').default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const complianceRules = pgTable(
+  'compliance_rules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    jurisdiction: complianceJurisdictionEnum('jurisdiction').notNull(),
+    ruleType: text('rule_type').notNull(),
+    title: text('title').notNull(),
+    description: text('description'),
+    config: jsonb('config').notNull().default(sql`'{}'::jsonb`),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    orgJurisIdx: index('idx_compliance_rules_org_juris').on(t.organizationId, t.jurisdiction),
+  }),
+);
+
+// =====================================================================
+// STAGE 8: PILOT
+// =====================================================================
+
+export const pilotRuns = pgTable('pilot_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  deploymentId: uuid('deployment_id').references(() => deployments.id, {
+    onDelete: 'set null',
+  }),
+  status: pilotStatusEnum('status').notNull().default('pending'),
+  sampleSize: integer('sample_size').notNull().default(10),
+  goNoGo: goNoGoEnum('go_no_go'),
+  reasoning: text('reasoning'),
+  redTeamResults: jsonb('red_team_results').default(sql`'[]'::jsonb`),
+  killSwitchActivated: boolean('kill_switch_activated').notNull().default(false),
+  killSwitchReason: text('kill_switch_reason'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const pilotReviews = pgTable(
+  'pilot_reviews',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    pilotRunId: uuid('pilot_run_id')
+      .notNull()
+      .references(() => pilotRuns.id, { onDelete: 'cascade' }),
+    messageId: uuid('message_id').references(() => messages.id, { onDelete: 'set null' }),
+    agentId: uuid('agent_id').references(() => agentProfiles.id, { onDelete: 'set null' }),
+    channel: text('channel').notNull(),
+    subject: text('subject'),
+    bodyText: text('body_text').notNull(),
+    verdict: pilotVerdictEnum('verdict').notNull(),
+    issues: text('issues').array(),
+    reasoning: text('reasoning'),
+    reviewedByUserId: uuid('reviewed_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    reviewedAt: timestamp('reviewed_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    runIdx: index('idx_pilot_reviews_run').on(t.pilotRunId),
+  }),
+);
+
+// =====================================================================
+// STAGE 9: HANDOFF
+// =====================================================================
+
+export const handoffRules = pgTable('handoff_rules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  naturalLanguageRule: text('natural_language_rule').notNull(),
+  triggerConfig: jsonb('trigger_config').notNull().default(sql`'{}'::jsonb`),
+  priority: integer('priority').notNull().default(0),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const escalationPaths = pgTable(
+  'escalation_paths',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    handoffRuleId: uuid('handoff_rule_id').references(() => handoffRules.id, {
+      onDelete: 'cascade',
+    }),
+    assignedUserId: uuid('assigned_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    role: escalationRoleEnum('role').notNull().default('ae'),
+    slaMinutes: integer('sla_minutes').notNull().default(60),
+    contextPacketTemplate: text('context_packet_template'),
+    notificationChannels: text('notification_channels').array(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    ruleIdx: index('idx_escalation_paths_rule').on(t.handoffRuleId),
+  }),
+);
+
+// =====================================================================
+// STAGE 10: SAVED QUERIES + DASHBOARDS
+// =====================================================================
+
+export const savedQueries = pgTable('saved_queries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  naturalLanguage: text('natural_language').notNull(),
+  generatedSql: text('generated_sql'),
+  lastRunAt: timestamp('last_run_at'),
+  lastResultCount: integer('last_result_count'),
+  lastResult: jsonb('last_result'),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const customDashboards = pgTable('custom_dashboards', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  layout: jsonb('layout').notNull().default(sql`'[]'::jsonb`),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// =====================================================================
+// STAGE 11: OPTIMIZATION
+// =====================================================================
+
+export const optimizationProposals = pgTable(
+  'optimization_proposals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    proposalType: proposalTypeEnum('proposal_type').notNull(),
+    targetResourceType: text('target_resource_type').notNull(),
+    targetResourceId: uuid('target_resource_id'),
+    title: text('title').notNull(),
+    description: text('description').notNull(),
+    rationale: text('rationale'),
+    beforeValue: jsonb('before_value'),
+    afterValue: jsonb('after_value'),
+    expectedImpact: text('expected_impact'),
+    status: proposalStatusEnum('status').notNull().default('pending'),
+    appliedAt: timestamp('applied_at'),
+    appliedByUserId: uuid('applied_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    dismissedAt: timestamp('dismissed_at'),
+    dismissReason: text('dismiss_reason'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    orgStatusIdx: index('idx_opt_proposals_org_status').on(t.organizationId, t.status),
+  }),
+);
+
+export const experiments = pgTable('experiments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  hypothesis: text('hypothesis'),
+  metric: text('metric').notNull(),
+  variantAConfig: jsonb('variant_a_config').notNull().default(sql`'{}'::jsonb`),
+  variantBConfig: jsonb('variant_b_config').notNull().default(sql`'{}'::jsonb`),
+  targetSampleSize: integer('target_sample_size').notNull().default(1000),
+  status: experimentStatusEnum('status').notNull().default('draft'),
+  startedAt: timestamp('started_at'),
+  endedAt: timestamp('ended_at'),
+  winningVariant: experimentVariantEnum('winning_variant'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const experimentResults = pgTable(
+  'experiment_results',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    experimentId: uuid('experiment_id')
+      .notNull()
+      .references(() => experiments.id, { onDelete: 'cascade' }),
+    variant: experimentVariantEnum('variant').notNull(),
+    metric: text('metric').notNull(),
+    value: real('value').notNull(),
+    sampleSize: integer('sample_size').notNull().default(0),
+    capturedAt: timestamp('captured_at').notNull().defaultNow(),
+  },
+  (t) => ({
+    experimentIdx: index('idx_experiment_results_experiment').on(t.experimentId),
+  }),
+);
+
+// =====================================================================
 // TYPE EXPORTS
 // =====================================================================
 
@@ -1019,3 +1499,35 @@ export type WorkspaceStage = typeof workspaceStages.$inferSelect;
 export type NewWorkspaceStage = typeof workspaceStages.$inferInsert;
 export type AssistantMessage = typeof assistantMessages.$inferSelect;
 export type NewAssistantMessage = typeof assistantMessages.$inferInsert;
+export type DataSource = typeof dataSources.$inferSelect;
+export type NewDataSource = typeof dataSources.$inferInsert;
+export type ValueProp = typeof valueProps.$inferSelect;
+export type NewValueProp = typeof valueProps.$inferInsert;
+export type PricingTier = typeof pricingTiers.$inferSelect;
+export type NewPricingTier = typeof pricingTiers.$inferInsert;
+export type CompetitiveMatrixRow = typeof competitiveMatrix.$inferSelect;
+export type NewCompetitiveMatrixRow = typeof competitiveMatrix.$inferInsert;
+export type KnowledgeBaseEntry = typeof knowledgeBase.$inferSelect;
+export type NewKnowledgeBaseEntry = typeof knowledgeBase.$inferInsert;
+export type Deployment = typeof deployments.$inferSelect;
+export type NewDeployment = typeof deployments.$inferInsert;
+export type ComplianceRule = typeof complianceRules.$inferSelect;
+export type NewComplianceRule = typeof complianceRules.$inferInsert;
+export type PilotRun = typeof pilotRuns.$inferSelect;
+export type NewPilotRun = typeof pilotRuns.$inferInsert;
+export type PilotReview = typeof pilotReviews.$inferSelect;
+export type NewPilotReview = typeof pilotReviews.$inferInsert;
+export type HandoffRule = typeof handoffRules.$inferSelect;
+export type NewHandoffRule = typeof handoffRules.$inferInsert;
+export type EscalationPath = typeof escalationPaths.$inferSelect;
+export type NewEscalationPath = typeof escalationPaths.$inferInsert;
+export type SavedQuery = typeof savedQueries.$inferSelect;
+export type NewSavedQuery = typeof savedQueries.$inferInsert;
+export type CustomDashboard = typeof customDashboards.$inferSelect;
+export type NewCustomDashboard = typeof customDashboards.$inferInsert;
+export type OptimizationProposal = typeof optimizationProposals.$inferSelect;
+export type NewOptimizationProposal = typeof optimizationProposals.$inferInsert;
+export type Experiment = typeof experiments.$inferSelect;
+export type NewExperiment = typeof experiments.$inferInsert;
+export type ExperimentResult = typeof experimentResults.$inferSelect;
+export type NewExperimentResult = typeof experimentResults.$inferInsert;
