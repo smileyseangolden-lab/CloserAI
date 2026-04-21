@@ -5,13 +5,13 @@ import { db } from '../../db/index.js';
 import { assistantMessages, workspaceStages } from '../../db/schema.js';
 import { validateBody } from '../../middleware/validate.js';
 import { ValidationError } from '../../utils/errors.js';
-import { claude } from '../ai/anthropic.js';
 import { logger } from '../../utils/logger.js';
 import {
   getStageDefinition,
   isValidStageId,
   STAGE_DEFINITIONS,
 } from '../workspace/workspace.stages.js';
+import { runAssistantTurn } from './assistantEngine.js';
 
 export const assistantRouter = Router();
 
@@ -103,29 +103,26 @@ assistantRouter.post('/:stageId/chat', validateBody(chatSchema), async (req, res
 
 ${priorContextBlock}
 
+You have access to research tools (web_fetch, read_approved_stage, search_knowledge_base, get_company_profile, plus any stage-specific tools). USE THEM proactively when:
+  - the user gives you a URL — fetch it before asking questions
+  - you need data from an earlier approved stage — read it
+  - the user mentions a competitor / brand / page — research it
+
+The user can also issue refine commands at any time: "make it shorter", "more technical", "more proof points", "tighten the differentiators", "drop pricing tier 3". When you see one, revise your most recent proposedDraft and re-emit it whole.
+
 When you have new structured information, end your reply with a fenced \`\`\`json code block containing a single object named "proposedDraft" — e.g.:
 \`\`\`json
 { "field": "value" }
 \`\`\`
 Only include keys you are confident about. Omit the block entirely when the turn is purely conversational.`;
 
-    const transcript = prior
-      .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-      .join('\n\n');
-
-    const prompt = transcript
-      ? `${transcript}\n\nUser: ${req.body.message}`
-      : `User: ${req.body.message}`;
-
-    const { text } = await claude(prompt, {
-      system: systemPrompt,
+    const result = await runAssistantTurn({
+      stageId,
+      systemPrompt,
+      history: prior.map((m) => ({ role: m.role, content: m.content })),
+      userMessage: req.body.message,
       orgId,
-      maxTokens: 2048,
-      temperature: 0.5,
     });
-
-    const proposedDraft = extractProposedDraft(text);
-    const visibleText = stripJsonBlock(text);
 
     const [userRow] = await db
       .insert(assistantMessages)
@@ -145,15 +142,17 @@ Only include keys you are confident about. Omit the block entirely when the turn
         userId,
         stageId,
         role: 'assistant',
-        content: visibleText,
-        proposedDraft,
+        content: result.text,
+        proposedDraft: result.proposedDraft,
       })
       .returning();
 
     res.json({
       userMessage: userRow,
       assistantMessage: assistantRow,
-      proposedDraft,
+      proposedDraft: result.proposedDraft,
+      toolTrace: result.toolTrace,
+      model: result.model,
     });
   } catch (err) {
     logger.error({ err }, 'assistant chat failed');
@@ -173,23 +172,3 @@ assistantRouter.get('/stages', async (_req, res) => {
   );
 });
 
-function extractProposedDraft(text: string): Record<string, unknown> | null {
-  const match = text.match(/```json\s*([\s\S]*?)```/i);
-  if (!match || !match[1]) return null;
-  try {
-    const parsed = JSON.parse(match[1]);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      if ('proposedDraft' in parsed && typeof parsed.proposedDraft === 'object') {
-        return parsed.proposedDraft as Record<string, unknown>;
-      }
-      return parsed as Record<string, unknown>;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function stripJsonBlock(text: string): string {
-  return text.replace(/```json\s*[\s\S]*?```/gi, '').trim();
-}
