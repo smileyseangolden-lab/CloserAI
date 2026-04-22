@@ -22,56 +22,32 @@ async function ensurePgvector() {
  * Syncs every table in schema.ts to the database. On a fresh DB this creates
  * the entire schema; on an existing DB it applies additive changes.
  *
- * `--force` suppresses the destructive-action warning, but drizzle-kit push
- * *still* prompts interactively when it can't automatically disambiguate a
- * schema change (e.g. "is this a new table, or was an existing one
- * renamed?"). The default on every such prompt is the additive choice —
- * "create table", "add column" — which is exactly what we want for every
- * additive change in this repo.
+ * `--force` suppresses destructive-change warnings, but drizzle-kit push
+ * still prompts interactively to disambiguate new-vs-renamed entities. The
+ * default on every such prompt is the additive choice — "create table",
+ * "add column" — which is exactly what every change in this repo needs.
  *
- * We feed a steady stream of newlines into the child's stdin on an interval
- * and keep it open until the child exits. Closing stdin prematurely makes
- * drizzle-kit's prompt library see EOF and bail out without applying
- * changes, which is why a one-shot write-then-end doesn't work here.
+ * We use `sh -c 'yes "" | …'` to stream blank lines into drizzle-kit's
+ * stdin. That's the canonical "auto-Enter every prompt" pattern and is
+ * immune to TTY/keypress quirks in prompt libraries that sometimes ignore
+ * newlines written directly by the Node parent. When drizzle-kit exits the
+ * shell closes the pipe and `yes` terminates with SIGPIPE; the pipeline's
+ * exit status is drizzle-kit's.
  */
 async function drizzlePush() {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn('npx', ['drizzle-kit', 'push', '--force'], {
-      cwd: serverRoot,
-      stdio: ['pipe', 'inherit', 'inherit'],
-      env: { ...process.env },
-    });
-
-    const pump = setInterval(() => {
-      if (child.stdin && !child.stdin.destroyed && child.stdin.writable) {
-        try {
-          child.stdin.write('\n');
-        } catch {
-          clearInterval(pump);
-        }
-      } else {
-        clearInterval(pump);
-      }
-    }, 50);
-
-    const settle = (err?: Error) => {
-      clearInterval(pump);
-      if (child.stdin && !child.stdin.destroyed) {
-        try {
-          child.stdin.end();
-        } catch {
-          /* ignore */
-        }
-      }
-      if (err) reject(err);
-      else resolve();
-    };
-
-    child.on('error', (err) => settle(err));
+    const child = spawn(
+      'sh',
+      ['-c', 'yes "" | npx drizzle-kit push --force'],
+      {
+        cwd: serverRoot,
+        stdio: 'inherit',
+        env: { ...process.env },
+      },
+    );
+    child.on('error', reject);
     child.on('exit', (code) =>
-      code === 0
-        ? settle()
-        : settle(new Error(`drizzle-kit push exited ${code}`)),
+      code === 0 ? resolve() : reject(new Error(`drizzle-kit push exited ${code}`)),
     );
   });
 }
