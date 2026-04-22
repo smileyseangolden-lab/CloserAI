@@ -83,6 +83,11 @@ const envSchema = z.object({
 
   // How often the manager agents tick looks for due managers (milliseconds).
   MANAGER_SCHEDULER_INTERVAL_MS: z.coerce.number().default(600_000),
+
+  // Set to "true" only when the app is actually served over TLS. When off,
+  // Helmet omits the HSTS header and the CSP upgrade-insecure-requests
+  // directive so plain-HTTP access (self-host / IP-address dev) works.
+  FORCE_HTTPS: z.coerce.boolean().default(false),
 });
 
 export const env = envSchema.parse(process.env);
