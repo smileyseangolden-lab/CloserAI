@@ -11,8 +11,82 @@ import {
   embedAndStoreKnowledge,
 } from '../ai/knowledgeRetrieval.js';
 import { logger } from '../../utils/logger.js';
+import { AGENT_CATALOG, recommendSquad } from './agentCatalog.js';
 
 export const agentsRouter = Router();
+
+// ---- Catalog routes (20-agent squad) --------------------------------------
+
+agentsRouter.get('/catalog', (_req, res) => {
+  res.json(
+    AGENT_CATALOG.map((a) => ({
+      key: a.key,
+      name: a.name,
+      category: a.category,
+      agentType: a.agentType,
+      personalityStyle: a.personalityStyle,
+      channels: a.channels,
+      description: a.description,
+      motions: a.motions,
+    })),
+  );
+});
+
+agentsRouter.get('/catalog/squad', (req, res) => {
+  const motion = (req.query.motion as string) || 'outbound_heavy';
+  const valid = ['outbound_heavy', 'inbound_heavy', 'partner_driven', 'plg'] as const;
+  type Motion = (typeof valid)[number];
+  if (!(valid as readonly string[]).includes(motion)) {
+    return res.status(422).json({ error: { message: 'Invalid motion' } });
+  }
+  res.json({ motion, keys: recommendSquad(motion as Motion) });
+});
+
+/**
+ * Activate an agent from the catalog: upsert an agent_profiles row using the
+ * catalog blueprint (or merge user overrides on top). Idempotent — repeated
+ * activation updates the existing row.
+ */
+agentsRouter.post('/catalog/:key/activate', async (req, res, next) => {
+  try {
+    const blueprint = AGENT_CATALOG.find((a) => a.key === req.params.key);
+    if (!blueprint) throw new NotFoundError('Catalog agent');
+    const orgId = req.auth!.organizationId;
+    const overrides = (req.body ?? {}) as Record<string, unknown>;
+
+    const values = {
+      organizationId: orgId,
+      name: (overrides.name as string) ?? blueprint.name,
+      agentType: blueprint.agentType,
+      personalityStyle: blueprint.personalityStyle,
+      toneDescription: (overrides.toneDescription as string) ?? blueprint.description,
+      systemPromptOverride: (overrides.systemPromptOverride as string) ?? blueprint.systemPrompt,
+      senderName: (overrides.senderName as string) ?? blueprint.name,
+      senderTitle: (overrides.senderTitle as string) ?? null,
+      isActive: (overrides.isActive as boolean) ?? true,
+    };
+
+    const [existing] = await db
+      .select()
+      .from(agentProfiles)
+      .where(and(eq(agentProfiles.organizationId, orgId), eq(agentProfiles.name, values.name)))
+      .limit(1);
+
+    if (existing) {
+      const [updated] = await db
+        .update(agentProfiles)
+        .set({ ...values, updatedAt: new Date() })
+        .where(eq(agentProfiles.id, existing.id))
+        .returning();
+      return res.json({ ...updated, catalogKey: blueprint.key });
+    }
+
+    const [created] = await db.insert(agentProfiles).values(values).returning();
+    res.status(201).json({ ...created, catalogKey: blueprint.key });
+  } catch (err) {
+    next(err);
+  }
+});
 
 const agentSchema = z.object({
   name: z.string().min(1),

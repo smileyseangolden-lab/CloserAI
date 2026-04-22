@@ -16,7 +16,8 @@ export type JobName =
   | 'warmup_email'
   | 'sync_inbox'
   | 'analyze_reply'
-  | 'execute_campaign_step';
+  | 'execute_campaign_step'
+  | 'analyze_optimization';
 
 export const sendQueue = new Queue<{ messageId: string }>('send', { connection });
 export const enrichQueue = new Queue<{ leadId: string; organizationId: string }>('enrich', {
@@ -27,6 +28,10 @@ export const scoreQueue = new Queue<{ leadId: string; organizationId: string }>(
 });
 export const campaignQueue = new Queue<{ campaignLeadId: string }>('campaign', { connection });
 export const replyQueue = new Queue<{ messageId: string }>('reply', { connection });
+export const optimizationQueue = new Queue<{ organizationId: string }>('optimization', {
+  connection,
+});
+export const managerQueue = new Queue<{ managerAgentId: string }>('manager', { connection });
 
 export const sendEvents = new QueueEvents('send', { connection });
 export const campaignEvents = new QueueEvents('campaign', { connection });

@@ -31,6 +31,7 @@
     "mailparser": "^3.7.1",
     "nanoid": "^5.0.7",
     "nodemailer": "^6.9.15",
+    "pdf-parse": "^1.1.1",
     "pg": "^8.13.0",
     "pino": "^9.4.0",
     "pino-http": "^10.3.0",

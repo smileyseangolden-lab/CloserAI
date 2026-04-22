@@ -28,7 +28,7 @@ export interface ProviderField {
 export interface ProviderDefinition {
   key: string; // stable identifier persisted in DB
   name: string; // human-friendly label
-  category: 'ai' | 'enrichment' | 'linkedin' | 'email' | 'general';
+  category: 'ai' | 'enrichment' | 'linkedin' | 'email' | 'crm' | 'general';
   vendor?: string;
   docsUrl?: string;
   description: string;
@@ -330,6 +330,77 @@ export const PROVIDER_CATALOG: ProviderDefinition[] = [
         envFallback: 'OUTBOUND_MESSAGE_ID_DOMAIN',
         default: 'closerai.local',
         description: 'Stamped into outbound Message-IDs so inbound replies can be threaded.',
+      },
+    ],
+  },
+
+  // ---------- CRM ----------
+  {
+    key: 'crm_hubspot',
+    name: 'HubSpot',
+    vendor: 'HubSpot',
+    category: 'crm',
+    docsUrl: 'https://developers.hubspot.com/docs/api/oauth',
+    description: 'HubSpot CRM — OAuth app for push/pull sync of leads, contacts, deals.',
+    fields: [
+      {
+        key: 'clientId',
+        label: 'Client ID',
+        type: 'text',
+        envFallback: 'HUBSPOT_CLIENT_ID',
+      },
+      {
+        key: 'clientSecret',
+        label: 'Client secret',
+        type: 'password',
+        secret: true,
+        envFallback: 'HUBSPOT_CLIENT_SECRET',
+      },
+    ],
+  },
+  {
+    key: 'crm_salesforce',
+    name: 'Salesforce',
+    vendor: 'Salesforce',
+    category: 'crm',
+    docsUrl: 'https://help.salesforce.com/s/articleView?id=sf.connected_app_create_api_integration.htm',
+    description: 'Salesforce — Connected App for OAuth Web Server flow.',
+    fields: [
+      {
+        key: 'clientId',
+        label: 'Consumer Key',
+        type: 'text',
+        envFallback: 'SALESFORCE_CLIENT_ID',
+      },
+      {
+        key: 'clientSecret',
+        label: 'Consumer Secret',
+        type: 'password',
+        secret: true,
+        envFallback: 'SALESFORCE_CLIENT_SECRET',
+      },
+    ],
+  },
+  {
+    key: 'crm_pipedrive',
+    name: 'Pipedrive',
+    vendor: 'Pipedrive',
+    category: 'crm',
+    docsUrl: 'https://pipedrive.readme.io/docs/marketplace-oauth-authorization',
+    description: 'Pipedrive — Marketplace OAuth app for push sync of deals & people.',
+    fields: [
+      {
+        key: 'clientId',
+        label: 'Client ID',
+        type: 'text',
+        envFallback: 'PIPEDRIVE_CLIENT_ID',
+      },
+      {
+        key: 'clientSecret',
+        label: 'Client secret',
+        type: 'password',
+        secret: true,
+        envFallback: 'PIPEDRIVE_CLIENT_SECRET',
       },
     ],
   },

@@ -11,11 +11,19 @@ declare module 'express-serve-static-core' {
 
 export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
+  // Header-based auth (default).
+  let rawToken: string | null = null;
+  if (header?.startsWith('Bearer ')) {
+    rawToken = header.slice(7);
+  } else if (typeof req.query.token === 'string' && req.query.token.length > 0) {
+    // Query-param fallback for browser EventSource, which cannot set headers.
+    // Scoped to GET requests to avoid leaking in server logs for writes.
+    if (req.method === 'GET') rawToken = req.query.token;
+  }
+  if (!rawToken) {
     return next(new UnauthorizedError('Missing access token'));
   }
-  const token = header.slice(7);
-  const payload = verifyToken(token);
+  const payload = verifyToken(rawToken);
   if (payload.type !== 'access') {
     return next(new UnauthorizedError('Wrong token type'));
   }

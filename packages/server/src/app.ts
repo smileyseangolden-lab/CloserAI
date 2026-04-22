@@ -15,7 +15,24 @@ export function createApp() {
   const app = express();
 
   app.set('trust proxy', 1);
-  app.use(helmet());
+  app.use(
+    helmet({
+      // We're served over plain HTTP on an IP address in dev/self-host
+      // deployments, so HSTS must not be set — once a browser sees it, it
+      // permanently upgrades http:// requests to this origin to https:// for
+      // max-age seconds and every API call fails. Drop HSTS and the CSP
+      // `upgrade-insecure-requests` directive that causes the same effect
+      // for sub-resources. Re-enable in production behind TLS by setting
+      // FORCE_HTTPS=true (handled below).
+      strictTransportSecurity: env.FORCE_HTTPS ? undefined : false,
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: env.FORCE_HTTPS
+          ? {}
+          : { 'upgrade-insecure-requests': null },
+      },
+    }),
+  );
   app.use(
     cors({
       origin: env.CLIENT_URL,

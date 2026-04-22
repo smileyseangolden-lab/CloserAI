@@ -20,16 +20,31 @@ async function ensurePgvector() {
 
 /**
  * Syncs every table in schema.ts to the database. On a fresh DB this creates
- * the entire schema; on an existing DB it applies additive changes. `--force`
- * suppresses the interactive prompt so this runs cleanly inside Docker.
+ * the entire schema; on an existing DB it applies additive changes.
+ *
+ * `--force` suppresses destructive-change warnings, but drizzle-kit push
+ * still prompts interactively to disambiguate new-vs-renamed entities. The
+ * default on every such prompt is the additive choice — "create table",
+ * "add column" — which is exactly what every change in this repo needs.
+ *
+ * We use `sh -c 'yes "" | …'` to stream blank lines into drizzle-kit's
+ * stdin. That's the canonical "auto-Enter every prompt" pattern and is
+ * immune to TTY/keypress quirks in prompt libraries that sometimes ignore
+ * newlines written directly by the Node parent. When drizzle-kit exits the
+ * shell closes the pipe and `yes` terminates with SIGPIPE; the pipeline's
+ * exit status is drizzle-kit's.
  */
 async function drizzlePush() {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn('npx', ['drizzle-kit', 'push', '--force'], {
-      cwd: serverRoot,
-      stdio: 'inherit',
-      env: { ...process.env },
-    });
+    const child = spawn(
+      'sh',
+      ['-c', 'yes "" | npx drizzle-kit push --force'],
+      {
+        cwd: serverRoot,
+        stdio: 'inherit',
+        env: { ...process.env },
+      },
+    );
     child.on('error', reject);
     child.on('exit', (code) =>
       code === 0 ? resolve() : reject(new Error(`drizzle-kit push exited ${code}`)),

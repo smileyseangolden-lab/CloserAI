@@ -15,6 +15,18 @@ import { activitiesRouter } from './modules/activities/activities.routes.js';
 import { analyticsRouter } from './modules/analytics/analytics.routes.js';
 import { inboundRouter } from './modules/inbound/inbound.routes.js';
 import { adminRouter } from './modules/admin/admin.routes.js';
+import { workspaceRouter } from './modules/workspace/workspace.routes.js';
+import { assistantRouter } from './modules/assistant/assistant.routes.js';
+import { dataSourcesRouter } from './modules/dataSources/dataSources.routes.js';
+import { valuePropsRouter } from './modules/valueProps/valueProps.routes.js';
+import { knowledgeRouter } from './modules/knowledge/knowledge.routes.js';
+import { deploymentsRouter } from './modules/deployments/deployments.routes.js';
+import { pilotRouter } from './modules/pilot/pilot.routes.js';
+import { handoffRouter } from './modules/handoff/handoff.routes.js';
+import { queriesRouter } from './modules/queries/queries.routes.js';
+import { optimizationRouter } from './modules/optimization/optimization.routes.js';
+import { crmRouter } from './modules/crm/crm.routes.js';
+import { managersRouter } from './modules/managers/managers.routes.js';
 
 export function createApiRouter() {
   const api = Router();
@@ -39,6 +51,18 @@ export function createApiRouter() {
   api.use('/activities', requireAuth, activitiesRouter);
   api.use('/analytics', requireAuth, analyticsRouter);
   api.use('/admin', requireAuth, adminRouter);
+  api.use('/workspace', requireAuth, workspaceRouter);
+  api.use('/assistant', requireAuth, assistantRouter);
+  api.use('/data-sources', requireAuth, dataSourcesRouter);
+  api.use('/value-props', requireAuth, valuePropsRouter);
+  api.use('/knowledge', requireAuth, knowledgeRouter);
+  api.use('/deployments', requireAuth, deploymentsRouter);
+  api.use('/pilot', requireAuth, pilotRouter);
+  api.use('/handoff', requireAuth, handoffRouter);
+  api.use('/queries', requireAuth, queriesRouter);
+  api.use('/optimization', requireAuth, optimizationRouter);
+  api.use('/crm', requireAuth, crmRouter);
+  api.use('/managers', requireAuth, managersRouter);
 
   return api;
 }

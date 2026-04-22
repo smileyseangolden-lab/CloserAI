@@ -64,6 +64,30 @@ const envSchema = z.object({
 
   RATE_LIMIT_USER_PER_MIN: z.coerce.number().default(100),
   RATE_LIMIT_ORG_PER_MIN: z.coerce.number().default(1000),
+
+  // CRM OAuth — per-provider client credentials. Fall back to admin
+  // provider_settings overrides resolved via resolveProviderConfig().
+  HUBSPOT_CLIENT_ID: z.string().default(''),
+  HUBSPOT_CLIENT_SECRET: z.string().default(''),
+  SALESFORCE_CLIENT_ID: z.string().default(''),
+  SALESFORCE_CLIENT_SECRET: z.string().default(''),
+  PIPEDRIVE_CLIENT_ID: z.string().default(''),
+  PIPEDRIVE_CLIENT_SECRET: z.string().default(''),
+
+  // How often the optimization scheduler runs (minutes). 0 disables it.
+  OPTIMIZATION_SCHEDULER_INTERVAL_MIN: z.coerce.number().default(360),
+
+  // How often the campaign tick looks for due cadence steps (milliseconds).
+  // 0 disables the scheduler (useful in tests / one-off envs).
+  CAMPAIGN_SCHEDULER_INTERVAL_MS: z.coerce.number().default(30_000),
+
+  // How often the manager agents tick looks for due managers (milliseconds).
+  MANAGER_SCHEDULER_INTERVAL_MS: z.coerce.number().default(600_000),
+
+  // Set to "true" only when the app is actually served over TLS. When off,
+  // Helmet omits the HSTS header and the CSP upgrade-insecure-requests
+  // directive so plain-HTTP access (self-host / IP-address dev) works.
+  FORCE_HTTPS: z.coerce.boolean().default(false),
 });
 
 export const env = envSchema.parse(process.env);

@@ -5,6 +5,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { StagePage } from './pages/stages/StagePage';
 import { LeadsPage } from './pages/LeadsPage';
 import { LeadDetailPage } from './pages/LeadDetailPage';
 import { CampaignsPage } from './pages/CampaignsPage';
@@ -16,6 +17,8 @@ import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { CrmCallbackPage } from './pages/oauth/CrmCallbackPage';
+import { DashboardBuilderPage } from './pages/dashboards/DashboardBuilderPage';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const user = useAuthStore((s) => s.user);
@@ -35,6 +38,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      {/* OAuth popup landing page — must render outside the AppLayout. */}
+      <Route path="/oauth/crm-callback" element={<CrmCallbackPage />} />
       <Route
         path="/onboarding"
         element={
@@ -53,6 +58,10 @@ export default function App() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="dashboards/:id" element={<DashboardBuilderPage />} />
+        <Route path="stages/:stageId" element={<StagePage />} />
+
+        {/* Legacy routes — kept reachable from deep links and the workflow pages. */}
         <Route path="leads" element={<LeadsPage />} />
         <Route path="leads/:id" element={<LeadDetailPage />} />
         <Route path="campaigns" element={<CampaignsPage />} />
