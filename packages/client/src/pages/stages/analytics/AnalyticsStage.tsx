@@ -142,8 +142,8 @@ export function AnalyticsStage() {
       stage={stage}
       sidePanel={
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               <Database size={12} /> Ask in plain English
             </div>
             <textarea
@@ -164,7 +164,7 @@ export function AnalyticsStage() {
                 <Play size={12} /> {busy ? 'Running…' : 'Run'}
               </button>
             </div>
-            <div className="text-xs text-slate-400 mt-1">
+            <div className="text-xs text-text-muted mt-1">
               Read-only · 8s timeout · sandboxed to your org and an allowlist of pipeline tables.
             </div>
           </div>
@@ -176,9 +176,9 @@ export function AnalyticsStage() {
           )}
 
           {result && (
-            <div className="rounded-xl border border-slate-200 p-4">
+            <div className="rounded-xl border border-border-default p-4">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                <div className="text-xs font-medium text-text-muted uppercase tracking-wide">
                   Result · {result.rowCount} rows
                 </div>
                 {!saveAs && (
@@ -191,8 +191,8 @@ export function AnalyticsStage() {
                 )}
               </div>
               <details className="text-xs mb-2">
-                <summary className="text-slate-500 cursor-pointer">SQL</summary>
-                <pre className="bg-slate-50 rounded p-2 mt-1 overflow-auto max-h-32">
+                <summary className="text-text-muted cursor-pointer">SQL</summary>
+                <pre className="bg-surface-muted rounded p-2 mt-1 overflow-auto max-h-32">
                   {result.sql}
                 </pre>
               </details>
@@ -200,9 +200,9 @@ export function AnalyticsStage() {
             </div>
           )}
 
-          <div className="rounded-xl border border-slate-200 p-4">
+          <div className="rounded-xl border border-border-default p-4">
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide">
+              <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide">
                 <LayoutDashboard size={12} /> Dashboards · {dashboards.length}
               </div>
               <button className="btn-secondary text-xs" onClick={() => setCreateDashOpen(true)}>
@@ -210,7 +210,7 @@ export function AnalyticsStage() {
               </button>
             </div>
             {dashboards.length === 0 ? (
-              <div className="text-xs text-slate-400">
+              <div className="text-xs text-text-muted">
                 Build a dashboard by dragging widgets (stat cards, saved queries, stage
                 progress, agent anomalies) onto a grid.
               </div>
@@ -219,15 +219,15 @@ export function AnalyticsStage() {
                 {dashboards.map((d) => (
                   <div
                     key={d.id}
-                    className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2"
+                    className="flex items-center justify-between bg-surface border border-border-default rounded-lg px-3 py-2"
                   >
                     <Link
                       to={`/dashboards/${d.id}`}
                       className="flex-1 min-w-0 text-sm font-medium truncate hover:text-brand-700"
                     >
-                      <BarChart3 size={12} className="inline mr-1 text-slate-400" />
+                      <BarChart3 size={12} className="inline mr-1 text-text-muted" />
                       {d.name}
-                      <span className="text-xs text-slate-400 ml-2">
+                      <span className="text-xs text-text-muted ml-2">
                         {d.layout.length} widgets
                       </span>
                     </Link>
@@ -235,7 +235,7 @@ export function AnalyticsStage() {
                       onClick={() =>
                         setDeleteTarget({ kind: 'dashboard', id: d.id, name: d.name })
                       }
-                      className="text-slate-300 hover:text-red-500 p-1"
+                      className="text-text-muted hover:text-red-500 p-1"
                       aria-label="Delete"
                     >
                       <Trash2 size={14} />
@@ -246,12 +246,12 @@ export function AnalyticsStage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               Saved · saved_queries
             </div>
             {saved.length === 0 && (
-              <div className="text-xs text-slate-400">
+              <div className="text-xs text-text-muted">
                 Run a question with “Save as” filled in and it will appear here.
               </div>
             )}
@@ -259,16 +259,16 @@ export function AnalyticsStage() {
               {saved.map((q) => (
                 <div
                   key={q.id}
-                  className="bg-white border border-slate-200 rounded-lg p-3 text-sm"
+                  className="bg-surface border border-border-default rounded-lg p-3 text-sm"
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1 pr-2">
-                      <div className="font-medium text-slate-900 truncate">{q.name}</div>
-                      <div className="text-xs text-slate-500 line-clamp-1">
+                      <div className="font-medium text-text-primary truncate">{q.name}</div>
+                      <div className="text-xs text-text-muted line-clamp-1">
                         {q.naturalLanguage}
                       </div>
                       {q.lastRunAt && (
-                        <div className="text-[10px] text-slate-400 mt-1">
+                        <div className="text-[10px] text-text-muted mt-1">
                           last run {new Date(q.lastRunAt).toLocaleString()}
                           {q.lastResultCount !== null && ` · ${q.lastResultCount} rows`}
                         </div>
@@ -277,14 +277,14 @@ export function AnalyticsStage() {
                     <div className="flex gap-1">
                       <button
                         onClick={() => rerun(q.id)}
-                        className="text-slate-400 hover:text-brand-600 p-1"
+                        className="text-text-muted hover:text-brand-600 p-1"
                         aria-label="Re-run"
                       >
                         <Play size={14} />
                       </button>
                       <button
                         onClick={() => remove(q.id, q.name)}
-                        className="text-slate-300 hover:text-red-500 p-1"
+                        className="text-text-muted hover:text-red-500 p-1"
                         aria-label="Delete"
                       >
                         <Trash2 size={14} />
@@ -338,14 +338,14 @@ export function AnalyticsStage() {
 
 function ResultTable({ rows }: { rows: Record<string, unknown>[] }) {
   if (!rows || rows.length === 0) {
-    return <div className="text-xs text-slate-400">No rows.</div>;
+    return <div className="text-xs text-text-muted">No rows.</div>;
   }
   const cols = Object.keys(rows[0] ?? {});
   return (
     <div className="overflow-x-auto max-h-72">
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-slate-500 border-b border-slate-200">
+          <tr className="text-text-muted border-b border-border-default">
             {cols.map((c) => (
               <th key={c} className="text-left py-1 pr-3 font-medium">
                 {c}
@@ -355,9 +355,9 @@ function ResultTable({ rows }: { rows: Record<string, unknown>[] }) {
         </thead>
         <tbody>
           {rows.slice(0, 50).map((r, i) => (
-            <tr key={i} className="border-b border-slate-100">
+            <tr key={i} className="border-b border-border-subtle">
               {cols.map((c) => (
-                <td key={c} className="py-1.5 pr-3 text-slate-700">
+                <td key={c} className="py-1.5 pr-3 text-text-primary">
                   {formatCell(r[c])}
                 </td>
               ))}
@@ -366,7 +366,7 @@ function ResultTable({ rows }: { rows: Record<string, unknown>[] }) {
         </tbody>
       </table>
       {rows.length > 50 && (
-        <div className="text-xs text-slate-400 mt-1">+{rows.length - 50} more rows</div>
+        <div className="text-xs text-text-muted mt-1">+{rows.length - 50} more rows</div>
       )}
     </div>
   );

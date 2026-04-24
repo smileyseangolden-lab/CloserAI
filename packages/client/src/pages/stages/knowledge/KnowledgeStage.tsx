@@ -138,8 +138,8 @@ export function KnowledgeStage() {
       onApproved={() => setRefreshKey((k) => k + 1)}
       sidePanel={
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               <Upload size={12} /> Add to library
             </div>
             <div className="space-y-2 mb-3">
@@ -164,7 +164,7 @@ export function KnowledgeStage() {
                 {busy === 'paste' ? 'Embedding…' : 'Add pasted entry'}
               </button>
             </div>
-            <div className="border-t border-slate-200 pt-3 space-y-3">
+            <div className="border-t border-border-default pt-3 space-y-3">
               <div>
                 <div className="flex gap-2">
                   <input
@@ -181,7 +181,7 @@ export function KnowledgeStage() {
                     <Globe2 size={12} /> Fetch
                   </button>
                 </div>
-                <div className="text-xs text-slate-400 mt-1">
+                <div className="text-xs text-text-muted mt-1">
                   Strips HTML and embeds the first ~20k chars.
                 </div>
               </div>
@@ -204,7 +204,7 @@ export function KnowledgeStage() {
                 >
                   <FileText size={12} /> {busy === 'pdf' ? 'Parsing…' : 'Upload PDF'}
                 </button>
-                <div className="text-xs text-slate-400 mt-1">
+                <div className="text-xs text-text-muted mt-1">
                   PDFs are chunked, embedded, and searchable immediately.
                 </div>
               </div>
@@ -226,8 +226,8 @@ export function KnowledgeStage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               <Search size={12} /> Search RAG index
             </div>
             <div className="flex gap-2">
@@ -247,17 +247,17 @@ export function KnowledgeStage() {
             {hits && (
               <div className="mt-3 space-y-1.5">
                 {hits.length === 0 && (
-                  <div className="text-xs text-slate-400">No hits.</div>
+                  <div className="text-xs text-text-muted">No hits.</div>
                 )}
                 {hits.map((h) => (
                   <div
                     key={h.id}
-                    className="text-xs bg-slate-50 rounded px-2.5 py-1.5 border border-slate-200"
+                    className="text-xs bg-surface-muted rounded px-2.5 py-1.5 border border-border-default"
                   >
-                    <div className="font-medium text-slate-800">{h.title}</div>
-                    <div className="text-slate-600 line-clamp-2">{h.content}</div>
+                    <div className="font-medium text-text-primary">{h.title}</div>
+                    <div className="text-text-secondary line-clamp-2">{h.content}</div>
                     {h.similarity !== null && (
-                      <div className="text-[10px] text-slate-400 mt-0.5">
+                      <div className="text-[10px] text-text-muted mt-0.5">
                         sim {(h.similarity * 100).toFixed(0)}% · {h.source}
                       </div>
                     )}
@@ -267,22 +267,22 @@ export function KnowledgeStage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               <BookOpen size={12} /> Library · {entries.length} entries
             </div>
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {entries.length === 0 && (
-                <div className="text-xs text-slate-400">Empty. Add entries above.</div>
+                <div className="text-xs text-text-muted">Empty. Add entries above.</div>
               )}
               {entries.map((e) => (
                 <div
                   key={e.id}
-                  className="flex items-start justify-between bg-white rounded-lg border border-slate-200 p-2.5"
+                  className="flex items-start justify-between bg-surface rounded-lg border border-border-default p-2.5"
                 >
                   <div className="min-w-0 flex-1 pr-2">
                     <div className="flex items-center gap-2">
-                      <span className="badge bg-slate-100 text-slate-600 text-[10px] capitalize">
+                      <span className="badge bg-surface-muted text-text-secondary text-[10px] capitalize">
                         {e.source.replace(/_/g, ' ')}
                       </span>
                       {e.embeddedAt ? (
@@ -292,11 +292,11 @@ export function KnowledgeStage() {
                       )}
                     </div>
                     <div className="text-sm font-medium truncate">{e.title}</div>
-                    <div className="text-xs text-slate-500 line-clamp-1">{e.content}</div>
+                    <div className="text-xs text-text-muted line-clamp-1">{e.content}</div>
                   </div>
                   <button
                     onClick={() => setDeleteTarget(e)}
-                    className="text-slate-300 hover:text-red-500 p-1"
+                    className="text-text-muted hover:text-red-500 p-1"
                     aria-label="Delete"
                   >
                     <Trash2 size={14} />

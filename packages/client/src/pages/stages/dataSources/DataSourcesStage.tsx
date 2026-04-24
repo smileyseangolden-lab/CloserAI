@@ -65,7 +65,7 @@ export function DataSourcesStage() {
                 <div className="text-xs font-medium text-emerald-700 uppercase tracking-wide">
                   Approved stack · data_sources
                 </div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-text-muted">
                   ${totalCost.toLocaleString()}/mo
                   {budget && ` of $${Number(budget).toLocaleString()} budget`}
                 </div>
@@ -74,17 +74,17 @@ export function DataSourcesStage() {
                 {rows.map((r) => (
                   <div
                     key={r.id}
-                    className="flex items-center justify-between bg-white rounded-lg border border-slate-200 p-3"
+                    className="flex items-center justify-between bg-surface rounded-lg border border-border-default p-3"
                   >
                     <div className="min-w-0">
-                      <div className="font-medium text-slate-900 truncate">{r.providerName}</div>
-                      <div className="text-xs text-slate-500">
+                      <div className="font-medium text-text-primary truncate">{r.providerName}</div>
+                      <div className="text-xs text-text-muted">
                         <span className="capitalize">{r.tier}</span>
                         {r.estimatedMonthlyCostUsd &&
                           ` · ~$${Number(r.estimatedMonthlyCostUsd).toLocaleString()}/mo`}
                       </div>
                       {r.reasoning && (
-                        <div className="text-xs text-slate-600 mt-1 line-clamp-2">{r.reasoning}</div>
+                        <div className="text-xs text-text-secondary mt-1 line-clamp-2">{r.reasoning}</div>
                       )}
                     </div>
                     <StatusPill status={r.status} />
@@ -100,31 +100,31 @@ export function DataSourcesStage() {
             </div>
           )}
 
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               <Database size={12} /> Available providers
             </div>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {catalog.map((p) => {
                 const inStack = rows.find((r) => r.providerKey === p.key);
                 return (
-                  <div key={p.key} className="text-sm border-b border-slate-100 pb-2">
+                  <div key={p.key} className="text-sm border-b border-border-subtle pb-2">
                     <div className="flex items-center justify-between">
-                      <div className="font-medium text-slate-800">{p.name}</div>
+                      <div className="font-medium text-text-primary">{p.name}</div>
                       {inStack ? (
                         <span className="badge bg-emerald-100 text-emerald-700">In stack</span>
                       ) : (
-                        <span className="badge bg-slate-100 text-slate-500 capitalize">
+                        <span className="badge bg-surface-muted text-text-muted capitalize">
                           {p.category}
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-slate-500">{p.description}</div>
+                    <div className="text-xs text-text-muted">{p.description}</div>
                   </div>
                 );
               })}
               {catalog.length === 0 && (
-                <div className="text-xs text-slate-400">Loading catalog…</div>
+                <div className="text-xs text-text-muted">Loading catalog…</div>
               )}
             </div>
           </div>
@@ -138,7 +138,7 @@ function StatusPill({ status }: { status: DataSourceRow['status'] }) {
   const styles: Record<DataSourceRow['status'], string> = {
     recommended: 'bg-amber-100 text-amber-700',
     connected: 'bg-emerald-100 text-emerald-700',
-    skipped: 'bg-slate-100 text-slate-500',
+    skipped: 'bg-surface-muted text-text-muted',
     error: 'bg-red-100 text-red-700',
   };
   return <span className={`badge ${styles[status]}`}>{status}</span>;

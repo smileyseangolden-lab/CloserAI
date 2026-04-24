@@ -79,10 +79,10 @@ export function IcpStage() {
             </div>
           )}
           {icps.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-              <div className="font-medium text-slate-700 mb-1">Canonical ICPs</div>
+            <div className="rounded-xl border border-dashed border-border-default p-4 text-sm text-text-muted">
+              <div className="font-medium text-text-primary mb-1">Canonical ICPs</div>
               No tiers yet. Approve the draft above and they’ll be written into{' '}
-              <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">
+              <code className="text-xs bg-surface-muted px-1.5 py-0.5 rounded">
                 ideal_customer_profiles
               </code>
               .
@@ -106,7 +106,7 @@ function IcpCard({ icp, tier }: { icp: IcpRow; tier: 'A' | 'B' | 'C' }) {
   const tierColor =
     tier === 'A' ? 'bg-emerald-500' : tier === 'B' ? 'bg-amber-500' : 'bg-slate-400';
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-border-default bg-surface p-4">
       <div className="flex items-start gap-3">
         <div
           className={`w-8 h-8 rounded-lg ${tierColor} text-white flex items-center justify-center font-bold text-sm flex-shrink-0`}
@@ -115,19 +115,19 @@ function IcpCard({ icp, tier }: { icp: IcpRow; tier: 'A' | 'B' | 'C' }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <div className="font-medium text-slate-900 truncate">{icp.name}</div>
-            <Target size={12} className="text-slate-400" />
+            <div className="font-medium text-text-primary truncate">{icp.name}</div>
+            <Target size={12} className="text-text-muted" />
           </div>
           {icp.description && (
-            <p className="text-xs text-slate-600 mt-0.5 line-clamp-2">{icp.description}</p>
+            <p className="text-xs text-text-secondary mt-0.5 line-clamp-2">{icp.description}</p>
           )}
           <CriteriaRow label="Industries" values={icp.targetIndustries} />
           <CriteriaRow label="Sizes" values={icp.targetCompanySizes} />
           <CriteriaRow label="Titles" values={icp.targetJobTitles} />
           {icp.buyingSignals && icp.buyingSignals.length > 0 && (
             <div className="text-xs mt-1.5">
-              <span className="font-medium text-slate-700">Signals:</span>{' '}
-              <span className="text-slate-600">{icp.buyingSignals.slice(0, 3).join(', ')}</span>
+              <span className="font-medium text-text-primary">Signals:</span>{' '}
+              <span className="text-text-secondary">{icp.buyingSignals.slice(0, 3).join(', ')}</span>
             </div>
           )}
         </div>
@@ -140,13 +140,13 @@ function CriteriaRow({ label, values }: { label: string; values: string[] | null
   if (!values || values.length === 0) return null;
   return (
     <div className="text-xs mt-1.5 flex flex-wrap items-baseline gap-1">
-      <span className="font-medium text-slate-700">{label}:</span>
+      <span className="font-medium text-text-primary">{label}:</span>
       {values.slice(0, 4).map((v, i) => (
-        <span key={i} className="badge bg-slate-100 text-slate-600">
+        <span key={i} className="badge bg-surface-muted text-text-secondary">
           {v}
         </span>
       ))}
-      {values.length > 4 && <span className="text-slate-400">+{values.length - 4}</span>}
+      {values.length > 4 && <span className="text-text-muted">+{values.length - 4}</span>}
     </div>
   );
 }

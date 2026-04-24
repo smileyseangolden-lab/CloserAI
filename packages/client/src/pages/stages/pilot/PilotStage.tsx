@@ -122,13 +122,13 @@ export function PilotStage() {
       }
       sidePanel={
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               <ShieldCheck size={12} /> Pilot runs · {runs.length}
             </div>
             <div className="space-y-1.5">
               {runs.length === 0 && (
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-text-muted">
                   Click <span className="font-medium">Run pilot</span> to generate sample messages
                   for every active agent and red-team-review each one.
                 </div>
@@ -140,7 +140,7 @@ export function PilotStage() {
                   className={`w-full text-left text-xs px-3 py-2 rounded-lg border transition ${
                     openId === r.id
                       ? 'border-brand-300 bg-brand-50/50'
-                      : 'border-slate-200 hover:bg-slate-50'
+                      : 'border-border-default hover:bg-surface-muted'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -150,7 +150,7 @@ export function PilotStage() {
                     <RunStatus status={r.status} />
                   </div>
                   {r.goNoGo && (
-                    <div className="text-slate-500 mt-0.5">
+                    <div className="text-text-muted mt-0.5">
                       Recommendation:{' '}
                       <span
                         className={
@@ -169,9 +169,9 @@ export function PilotStage() {
           </div>
 
           {detail && (
-            <div className="rounded-xl border border-slate-200 p-4">
+            <div className="rounded-xl border border-border-default p-4">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                <div className="text-xs font-medium text-text-muted uppercase tracking-wide">
                   Reviewed messages · {detail.reviews.length}
                 </div>
                 <div className="flex gap-1">
@@ -199,7 +199,7 @@ export function PilotStage() {
                 </div>
               </div>
               {detail.reasoning && (
-                <div className="text-xs text-slate-700 bg-slate-50 rounded px-3 py-2 mb-3">
+                <div className="text-xs text-text-primary bg-surface-muted rounded px-3 py-2 mb-3">
                   {detail.reasoning}
                 </div>
               )}
@@ -207,20 +207,20 @@ export function PilotStage() {
                 {detail.reviews.map((r) => (
                   <div
                     key={r.id}
-                    className="bg-white border border-slate-200 rounded-lg p-3 text-xs"
+                    className="bg-surface border border-border-default rounded-lg p-3 text-xs"
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <VerdictPill verdict={r.verdict} />
-                      <span className="text-slate-500 capitalize">{r.channel}</span>
+                      <span className="text-text-muted capitalize">{r.channel}</span>
                     </div>
                     {r.subject && (
-                      <div className="font-medium text-slate-900">{r.subject}</div>
+                      <div className="font-medium text-text-primary">{r.subject}</div>
                     )}
-                    <div className="text-slate-700 whitespace-pre-wrap line-clamp-4">
+                    <div className="text-text-primary whitespace-pre-wrap line-clamp-4">
                       {r.bodyText}
                     </div>
                     {r.reasoning && (
-                      <div className="text-slate-500 mt-1.5 italic">{r.reasoning}</div>
+                      <div className="text-text-muted mt-1.5 italic">{r.reasoning}</div>
                     )}
                   </div>
                 ))}
@@ -250,7 +250,7 @@ export function PilotStage() {
 
 function RunStatus({ status }: { status: PilotRunRow['status'] }) {
   const styles: Record<PilotRunRow['status'], string> = {
-    pending: 'bg-slate-100 text-slate-500',
+    pending: 'bg-surface-muted text-text-muted',
     running: 'bg-amber-100 text-amber-700',
     ready_for_review: 'bg-blue-100 text-blue-700',
     approved: 'bg-emerald-100 text-emerald-700',

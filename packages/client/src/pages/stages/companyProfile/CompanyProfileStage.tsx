@@ -94,10 +94,10 @@ export function CompanyProfileStage() {
 function CanonicalProfilePanel({ profile }: { profile: BusinessProfile | null }) {
   if (!profile) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-        <div className="font-medium text-slate-700 mb-1">Canonical profile</div>
+      <div className="rounded-xl border border-dashed border-border-default p-4 text-sm text-text-muted">
+        <div className="font-medium text-text-primary mb-1">Canonical profile</div>
         Nothing persisted yet. Approve the draft above and I’ll write it to{' '}
-        <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">business_profiles</code>.
+        <code className="text-xs bg-surface-muted px-1.5 py-0.5 rounded">business_profiles</code>.
       </div>
     );
   }
@@ -106,25 +106,25 @@ function CanonicalProfilePanel({ profile }: { profile: BusinessProfile | null })
       <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 uppercase tracking-wide mb-2">
         <Check size={12} /> Approved · business_profiles
       </div>
-      <div className="text-base font-semibold text-slate-900">{profile.companyName}</div>
-      <div className="text-xs text-slate-500 mb-2">
+      <div className="text-base font-semibold text-text-primary">{profile.companyName}</div>
+      <div className="text-xs text-text-muted mb-2">
         {[profile.industry, profile.subIndustry, profile.annualRevenueRange]
           .filter(Boolean)
           .join(' · ')}
       </div>
       {profile.aiGeneratedSummary && (
-        <p className="text-sm text-slate-700 mb-2">{profile.aiGeneratedSummary}</p>
+        <p className="text-sm text-text-primary mb-2">{profile.aiGeneratedSummary}</p>
       )}
       {profile.valueProposition && (
         <div className="text-sm mb-2">
-          <span className="font-medium text-slate-700">Value prop: </span>
+          <span className="font-medium text-text-primary">Value prop: </span>
           {profile.valueProposition}
         </div>
       )}
       {profile.keyDifferentiators && profile.keyDifferentiators.length > 0 && (
         <div className="text-sm mb-2">
-          <div className="font-medium text-slate-700 mb-1">Differentiators</div>
-          <ul className="list-disc pl-5 text-slate-700">
+          <div className="font-medium text-text-primary mb-1">Differentiators</div>
+          <ul className="list-disc pl-5 text-text-primary">
             {profile.keyDifferentiators.map((d, i) => (
               <li key={i}>{d}</li>
             ))}
@@ -133,10 +133,10 @@ function CanonicalProfilePanel({ profile }: { profile: BusinessProfile | null })
       )}
       {profile.targetVerticals && profile.targetVerticals.length > 0 && (
         <div className="text-sm mb-2">
-          <div className="font-medium text-slate-700 mb-1">Target verticals</div>
+          <div className="font-medium text-text-primary mb-1">Target verticals</div>
           <div className="flex flex-wrap gap-1">
             {profile.targetVerticals.map((v, i) => (
-              <span key={i} className="badge bg-slate-100 text-slate-700">
+              <span key={i} className="badge bg-surface-muted text-text-primary">
                 {v}
               </span>
             ))}
