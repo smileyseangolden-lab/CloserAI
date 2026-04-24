@@ -47,15 +47,26 @@ leadsRouter.get('/', validateQuery(listQuerySchema), async (req, res, next) => {
     if (q.icpId) conditions.push(eq(leads.icpId, q.icpId));
     if (q.minScore !== undefined) conditions.push(sql`${leads.leadScore} >= ${q.minScore}`);
 
-    const rows = await db
-      .select()
-      .from(leads)
-      .where(and(...conditions))
-      .orderBy(desc(leads.leadScore), desc(leads.createdAt))
-      .limit(q.limit)
-      .offset(q.offset);
+    const [rows, totalRow] = await Promise.all([
+      db
+        .select()
+        .from(leads)
+        .where(and(...conditions))
+        .orderBy(desc(leads.leadScore), desc(leads.createdAt))
+        .limit(q.limit)
+        .offset(q.offset),
+      db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(leads)
+        .where(and(...conditions)),
+    ]);
 
-    res.json({ data: rows, limit: q.limit, offset: q.offset });
+    res.json({
+      data: rows,
+      limit: q.limit,
+      offset: q.offset,
+      total: totalRow[0]?.total ?? 0,
+    });
   } catch (err) {
     next(err);
   }

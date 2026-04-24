@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
-import { EmptyState, SkeletonCard, SkeletonRow } from '../components/ui';
+import { EmptyState, Pagination, SkeletonCard, SkeletonRow } from '../components/ui';
 import { Plus, Users } from 'lucide-react';
 
 interface Lead {
@@ -31,15 +31,27 @@ const statusColors: Record<string, string> = {
 export function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
+    setLoading(true);
+    const offset = (page - 1) * pageSize;
     void api
-      .get<{ data: Lead[] }>('/leads?limit=100')
-      .then((res) => setLeads(res.data))
+      .get<{ data: Lead[]; total: number }>(`/leads?limit=${pageSize}&offset=${offset}`)
+      .then((res) => {
+        setLeads(res.data);
+        setTotal(res.total ?? res.data.length);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [page, pageSize]);
 
-  if (!loading && leads.length === 0) {
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize]);
+
+  if (!loading && leads.length === 0 && total === 0) {
     return (
       <div className="p-4 md:p-8 max-w-7xl">
         <PageHeader title="Leads" subtitle="All leads in your workspace" />
@@ -155,6 +167,16 @@ export function LeadsPage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-4">
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       </div>
     </div>
   );

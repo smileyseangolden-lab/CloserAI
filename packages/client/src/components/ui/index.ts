@@ -24,3 +24,8 @@ export { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose 
 export { ThemeToggle } from './ThemeToggle';
 export { CommandPalette, useCommandPalette } from './CommandPalette';
 export { Field, FieldLabel, FieldHint, FieldError, FormError, FormRow } from './Form';
+export { Tabs, TabsList, TabsTrigger, TabsContent } from './Tabs';
+export { Pagination } from './Pagination';
+export { ErrorBoundary } from './ErrorBoundary';
+export { Timeline, type TimelineItem } from './Timeline';
+export { KeyboardShortcuts } from './KeyboardShortcuts';

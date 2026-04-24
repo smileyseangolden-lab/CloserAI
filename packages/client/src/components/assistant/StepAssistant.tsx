@@ -1,6 +1,18 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Sparkles, Check, RotateCcw, User, Bot, Mic, Wand2 } from 'lucide-react';
+import {
+  Send,
+  Sparkles,
+  Check,
+  RotateCcw,
+  User,
+  Bot,
+  Mic,
+  Wand2,
+  Copy,
+  RefreshCw,
+  AlertCircle,
+} from 'lucide-react';
 import { api } from '../../api/client';
 import type { StageDefinition } from '../../workflow/stages';
 import { ConfirmDialog, toast } from '../ui';
@@ -87,7 +99,9 @@ export function StepAssistant({
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,6 +145,7 @@ export function StepAssistant({
     setInput('');
     setBusy(true);
     setError(null);
+    setLastFailedMessage(null);
     const optimisticId = `tmp-user-${Date.now()}`;
     const streamingId = `tmp-ast-${Date.now()}`;
     setMessages((prev) => [
@@ -198,6 +213,7 @@ export function StepAssistant({
     } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticId && m.id !== streamingId));
       setError(err instanceof Error ? err.message : 'Failed to send');
+      setLastFailedMessage(text);
     } finally {
       setBusy(false);
     }
@@ -336,8 +352,19 @@ export function StepAssistant({
       </header>
 
       {error && (
-        <div className="px-8 py-2 bg-red-50 text-red-700 text-sm border-b border-red-100">
-          {error}
+        <div className="px-8 py-2 bg-red-50 text-red-700 text-sm border-b border-red-100 flex items-center justify-between gap-3 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={14} />
+            <span>{error}</span>
+          </div>
+          {lastFailedMessage && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-surface px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-500/30 dark:text-red-300 dark:hover:bg-red-500/10"
+              onClick={() => void send(lastFailedMessage)}
+            >
+              <RefreshCw size={12} /> Retry
+            </button>
+          )}
         </div>
       )}
 
@@ -365,13 +392,11 @@ export function StepAssistant({
             ) : messages.length === 0 ? (
               <OpeningCard stage={stage} />
             ) : (
-              messages.map((m) => <ChatBubble key={m.id} message={m} />)
+              groupMessages(messages).map((group) => (
+                <MessageGroup key={group.id} group={group} />
+              ))
             )}
-            {busy && (
-              <div className="flex items-center gap-2 text-sm text-text-muted">
-                <Sparkles size={14} className="animate-pulse" /> Thinking...
-              </div>
-            )}
+            {busy && <TypingIndicator />}
           </div>
 
           <div className="border-t border-border-default bg-surface px-8 py-4">
@@ -394,6 +419,8 @@ export function StepAssistant({
             )}
             <div className="flex gap-2">
               <textarea
+                ref={inputRef}
+                data-assistant-input="true"
                 className="input flex-1 resize-none"
                 rows={2}
                 placeholder={listening ? 'Listening…' : 'Type your reply, or tap the mic to talk...'}
@@ -426,8 +453,19 @@ export function StepAssistant({
               </div>
             </div>
             <div className="text-xs text-text-muted mt-1">
-              ⌘/Ctrl + Enter to send. Streaming tokens from the engine. This assistant has all
-              previously approved stages in context.
+              <kbd className="rounded border border-border-default bg-surface-muted px-1 py-0.5 font-mono text-[10px]">
+                ⌘
+              </kbd>
+              <span className="mx-0.5">+</span>
+              <kbd className="rounded border border-border-default bg-surface-muted px-1 py-0.5 font-mono text-[10px]">
+                Enter
+              </kbd>{' '}
+              to send ·{' '}
+              <kbd className="rounded border border-border-default bg-surface-muted px-1 py-0.5 font-mono text-[10px]">
+                m
+              </kbd>{' '}
+              to jump back here · streaming tokens from the engine with all approved stages in
+              context.
             </div>
           </div>
         </section>
@@ -494,30 +532,125 @@ function OpeningCard({ stage }: { stage: StageDefinition }) {
   );
 }
 
-function ChatBubble({ message }: { message: AssistantMessage }) {
-  const isUser = message.role === 'user';
+interface MessageGroupData {
+  id: string;
+  role: 'user' | 'assistant';
+  messages: AssistantMessage[];
+  lastAt: string;
+}
+
+function groupMessages(messages: AssistantMessage[]): MessageGroupData[] {
+  const groups: MessageGroupData[] = [];
+  for (const m of messages) {
+    const last = groups[groups.length - 1];
+    const sameRole = last && last.role === m.role;
+    const gap = last
+      ? Math.abs(new Date(m.createdAt).getTime() - new Date(last.lastAt).getTime())
+      : Infinity;
+    const closeInTime = gap < 2 * 60 * 1000;
+    if (sameRole && closeInTime) {
+      last.messages.push(m);
+      last.lastAt = m.createdAt;
+      continue;
+    }
+    groups.push({
+      id: `group-${m.id}`,
+      role: m.role,
+      messages: [m],
+      lastAt: m.createdAt,
+    });
+  }
+  return groups;
+}
+
+function formatBubbleTime(v: string) {
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = Date.now();
+  const diff = now - d.getTime();
+  const mins = Math.round(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success('Copied to clipboard');
+  } catch {
+    toast.error('Could not copy');
+  }
+}
+
+function MessageGroup({ group }: { group: MessageGroupData }) {
+  const isUser = group.role === 'user';
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
       <div
         className={`w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center ${
-          isUser ? 'bg-slate-700 dark:bg-slate-600 text-white' : 'bg-brand-100 text-brand-700'
+          isUser
+            ? 'bg-slate-700 dark:bg-slate-600 text-white'
+            : 'bg-brand-100 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
         }`}
+        aria-hidden="true"
       >
         {isUser ? <User size={14} /> : <Bot size={14} />}
       </div>
-      <div className={`max-w-[85%] ${isUser ? 'text-right' : ''}`}>
-        <div
-          className={`inline-block text-sm leading-relaxed rounded-2xl px-4 py-2.5 whitespace-pre-wrap ${
-            isUser ? 'bg-slate-700 dark:bg-slate-600 text-white' : 'bg-surface border border-border-default text-text-primary'
-          }`}
-        >
-          {message.content}
-        </div>
-        {message.proposedDraft && (
-          <div className="mt-1 text-xs text-brand-600 flex items-center gap-1">
-            <Sparkles size={12} /> Proposed updates applied to the preview
+      <div className={`flex flex-col gap-1 max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
+        {group.messages.map((m, i) => (
+          <div key={m.id} className="group relative">
+            <div
+              className={`text-sm leading-relaxed rounded-2xl px-4 py-2.5 whitespace-pre-wrap ${
+                isUser
+                  ? 'bg-slate-700 dark:bg-slate-600 text-white rounded-br-md'
+                  : 'bg-surface border border-border-default text-text-primary rounded-bl-md'
+              }`}
+            >
+              {m.content || (
+                <span className="text-text-muted italic">…</span>
+              )}
+            </div>
+            {!isUser && m.content && (
+              <button
+                type="button"
+                onClick={() => void copyText(m.content)}
+                className="absolute -right-2 -top-2 hidden group-hover:inline-flex h-6 w-6 items-center justify-center rounded-full border border-border-default bg-surface text-text-muted hover:text-text-primary shadow-sm"
+                title="Copy message"
+                aria-label="Copy message"
+              >
+                <Copy size={11} />
+              </button>
+            )}
+            {m.proposedDraft && i === group.messages.length - 1 && (
+              <div className="mt-1 text-xs text-brand-600 dark:text-brand-300 flex items-center gap-1">
+                <Sparkles size={12} /> Proposed updates applied to the preview
+              </div>
+            )}
           </div>
-        )}
+        ))}
+        <time
+          dateTime={new Date(group.lastAt).toISOString()}
+          title={new Date(group.lastAt).toLocaleString()}
+          className="text-[10px] text-text-muted tabular-nums"
+        >
+          {formatBubbleTime(group.lastAt)}
+        </time>
+      </div>
+    </div>
+  );
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex gap-3">
+      <div className="w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center bg-brand-100 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+        <Bot size={14} />
+      </div>
+      <div className="inline-flex items-center gap-1 rounded-2xl rounded-bl-md border border-border-default bg-surface px-3 py-2.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-bounce [animation-delay:-0.2s]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-bounce [animation-delay:-0.1s]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-text-muted animate-bounce" />
       </div>
     </div>
   );

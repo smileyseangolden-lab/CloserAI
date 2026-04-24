@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import {
   LayoutDashboard,
   LogOut,
@@ -16,6 +16,8 @@ import { STAGES } from '../../workflow/stages';
 import { api } from '../../api/client';
 import {
   CommandPalette,
+  ErrorBoundary,
+  KeyboardShortcuts,
   PromptDialog,
   Sheet,
   SheetContent,
@@ -47,6 +49,7 @@ export function AppLayout() {
   const [pauseSubmitting, setPauseSubmitting] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette();
+  const location = useLocation();
 
   useEffect(() => {
     void api.get<WorkspaceStage[]>('/workspace').then(setStages).catch(() => setStages([]));
@@ -152,10 +155,13 @@ export function AppLayout() {
             )}
           </div>
         )}
-        <Outlet />
+        <ErrorBoundary key={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <KeyboardShortcuts />
 
       <PromptDialog
         open={pauseDialogOpen}
@@ -259,46 +265,7 @@ function SidebarContents({
           Dashboard
         </NavLink>
 
-        <div className="px-3 text-[11px] font-semibold tracking-wider uppercase text-text-muted mb-2">
-          Workflow
-        </div>
-
-        <ol className="space-y-0.5">
-          {STAGES.map((stage, i) => {
-            const status = statusMap.get(stage.id) ?? 'locked';
-            const isLastApproved =
-              status !== 'approved' &&
-              i > 0 &&
-              statusMap.get(STAGES[i - 1]!.id) === 'approved';
-            return (
-              <li key={stage.id}>
-                <NavLink
-                  to={`/stages/${stage.id}`}
-                  onClick={onNavigate}
-                  className={({ isActive }) =>
-                    `group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition ${
-                      isActive
-                        ? 'bg-brand-50 text-brand-700 font-medium dark:bg-brand-500/15 dark:text-brand-300'
-                        : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary'
-                    }`
-                  }
-                >
-                  <StageIndicator status={status} order={stage.order} />
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate flex items-center gap-2">
-                      {stage.title}
-                      {isLastApproved && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-500 text-white font-semibold">
-                          Next
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </NavLink>
-              </li>
-            );
-          })}
-        </ol>
+        <WorkflowStepper statusMap={statusMap} onNavigate={onNavigate} />
 
         {isAdmin && (
           <>
@@ -364,22 +331,146 @@ function SidebarContents({
   );
 }
 
-function StageIndicator({
+function WorkflowStepper({
+  statusMap,
+  onNavigate,
+}: {
+  statusMap: Map<string, WorkspaceStage['status']>;
+  onNavigate: () => void;
+}) {
+  const completed = STAGES.filter((s) => statusMap.get(s.id) === 'approved').length;
+  const pct = Math.round((completed / STAGES.length) * 100);
+  const nextIndex = STAGES.findIndex((s) => statusMap.get(s.id) !== 'approved');
+
+  return (
+    <div>
+      <div className="px-3 mb-3">
+        <div className="flex items-center justify-between text-[11px] font-semibold tracking-wider uppercase text-text-muted">
+          <span>Workflow</span>
+          <span className="text-text-secondary normal-case tracking-normal font-medium">
+            {completed}/{STAGES.length}
+          </span>
+        </div>
+        <div className="mt-2 h-1.5 rounded-full bg-surface-muted overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-[width] duration-500"
+            style={{ width: `${pct}%` }}
+            aria-hidden="true"
+          />
+        </div>
+      </div>
+
+      <ol className="relative pl-3 pr-3">
+        {STAGES.map((stage, i) => {
+          const status = statusMap.get(stage.id) ?? 'locked';
+          const prev = i > 0 ? statusMap.get(STAGES[i - 1]!.id) : undefined;
+          const isNext = i === nextIndex && status !== 'approved';
+          const isLast = i === STAGES.length - 1;
+          const connectorTone = prev === 'approved' ? 'bg-emerald-400' : 'bg-border-default';
+          return (
+            <li key={stage.id} className="relative">
+              <NavLink
+                to={`/stages/${stage.id}`}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  `group flex items-start gap-3 rounded-lg pl-1 pr-2 py-1.5 text-sm transition ${
+                    isActive
+                      ? 'bg-brand-50 text-brand-700 font-medium dark:bg-brand-500/15 dark:text-brand-300'
+                      : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary'
+                  }`
+                }
+              >
+                <div className="relative flex flex-col items-center pt-1">
+                  <StageDot status={status} order={stage.order} isNext={isNext} />
+                  {!isLast && (
+                    <span
+                      aria-hidden="true"
+                      className={`w-px flex-1 min-h-[12px] mt-1 ${connectorTone}`}
+                    />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 pb-3">
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="truncate">{stage.title}</span>
+                    {isNext && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-500 text-white font-semibold">
+                        Next
+                      </span>
+                    )}
+                  </div>
+                  <StageChip status={status} />
+                </div>
+              </NavLink>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+function StageDot({
   status,
   order,
+  isNext,
 }: {
-  status: 'locked' | 'in_progress' | 'approved';
+  status: WorkspaceStage['status'];
   order: number;
+  isNext: boolean;
 }) {
   if (status === 'approved') {
-    return <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0" />;
+    return (
+      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white ring-4 ring-emerald-500/10">
+        <CheckCircle2 size={12} strokeWidth={3} />
+      </span>
+    );
   }
   if (status === 'in_progress') {
-    return <Loader2 size={18} className="text-amber-500 flex-shrink-0" />;
+    return (
+      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-600 ring-4 ring-amber-500/10 dark:bg-amber-500/20 dark:text-amber-300">
+        <Loader2 size={12} className="animate-spin" strokeWidth={3} />
+      </span>
+    );
+  }
+  if (isNext) {
+    return (
+      <span className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-brand-500 bg-surface text-brand-600 text-[10px] font-semibold ring-4 ring-brand-500/10 dark:text-brand-300">
+        {order}
+      </span>
+    );
   }
   return (
-    <div className="w-[18px] h-[18px] flex-shrink-0 rounded-full border border-border-default text-[10px] font-semibold text-text-muted flex items-center justify-center">
+    <span className="flex h-5 w-5 items-center justify-center rounded-full border border-border-default bg-surface text-text-muted text-[10px] font-semibold">
       {order}
-    </div>
+    </span>
+  );
+}
+
+function StageChip({ status }: { status: WorkspaceStage['status'] }) {
+  const map: Record<
+    WorkspaceStage['status'],
+    { label: string; classes: string }
+  > = {
+    approved: {
+      label: 'Approved',
+      classes:
+        'text-emerald-700 bg-emerald-50 dark:bg-emerald-500/15 dark:text-emerald-300',
+    },
+    in_progress: {
+      label: 'In progress',
+      classes: 'text-amber-700 bg-amber-50 dark:bg-amber-500/15 dark:text-amber-300',
+    },
+    locked: {
+      label: 'Not started',
+      classes: 'text-text-muted bg-surface-muted',
+    },
+  };
+  const cfg = map[status];
+  return (
+    <span
+      className={`mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${cfg.classes}`}
+    >
+      {cfg.label}
+    </span>
   );
 }

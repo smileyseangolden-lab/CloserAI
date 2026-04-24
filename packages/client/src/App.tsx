@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { useAuthStore } from './stores/auth';
 import { AppLayout } from './components/layout/AppLayout';
-import { LoadingBlock } from './components/ui';
+import { ErrorBoundary, LoadingBlock } from './components/ui';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -36,6 +36,7 @@ export default function App() {
   }, [loadCurrentUser]);
 
   return (
+    <ErrorBoundary>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -76,5 +77,6 @@ export default function App() {
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </ErrorBoundary>
   );
 }
