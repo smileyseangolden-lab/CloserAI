@@ -10,6 +10,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { api } from '../../../api/client';
+import { toast } from '../../../components/ui';
 
 type ManagerRole = 'sales_manager' | 'marketing_manager' | 'cro';
 type Cadence = 'hourly' | 'daily' | 'weekly' | 'manual';
@@ -83,22 +84,38 @@ export function ManagersPanel() {
   const managerByRole = new Map(managers.map((m) => [m.role, m]));
 
   async function enable(role: ManagerRole, cadence?: Cadence) {
-    await api.post('/managers/enable', { role, cadence });
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.post('/managers/enable', { role, cadence });
+      toast.success('Manager enabled');
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not enable manager');
+    }
   }
   async function toggle(id: string, active: boolean) {
-    await api.patch(`/managers/${id}`, { isActive: active });
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.patch(`/managers/${id}`, { isActive: active });
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update manager');
+    }
   }
   async function setCadence(id: string, cadence: Cadence) {
-    await api.patch(`/managers/${id}`, { cadence });
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.patch(`/managers/${id}`, { cadence });
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update cadence');
+    }
   }
   async function runNow(id: string) {
     setRunningId(id);
     try {
       await api.post(`/managers/${id}/run-now`, {});
+      toast.success('Manager run triggered — back in ~20s');
       setTimeout(() => setRefreshKey((k) => k + 1), 20_000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not trigger run');
     } finally {
       setRunningId(null);
     }
@@ -116,7 +133,7 @@ export function ManagersPanel() {
               className={`rounded-xl border p-4 ${
                 m?.isActive
                   ? 'border-emerald-200 bg-emerald-50/40'
-                  : 'border-slate-200 bg-white'
+                  : 'border-border-default bg-surface'
               }`}
             >
               <div className="flex items-start gap-3">
@@ -124,25 +141,25 @@ export function ManagersPanel() {
                   className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                     m?.isActive
                       ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-slate-100 text-slate-500'
+                      : 'bg-surface-muted text-text-muted'
                   }`}
                 >
                   <Icon size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <div className="font-semibold text-slate-900">{bp.name}</div>
+                    <div className="font-semibold text-text-primary">{bp.name}</div>
                     {m?.isActive ? (
                       <span className="badge bg-emerald-100 text-emerald-700">Active</span>
                     ) : m ? (
-                      <span className="badge bg-slate-100 text-slate-500">Paused</span>
+                      <span className="badge bg-surface-muted text-text-muted">Paused</span>
                     ) : (
-                      <span className="badge bg-slate-100 text-slate-500">Not enabled</span>
+                      <span className="badge bg-surface-muted text-text-muted">Not enabled</span>
                     )}
                   </div>
-                  <p className="text-sm text-slate-600 mt-0.5">{bp.description}</p>
+                  <p className="text-sm text-text-secondary mt-0.5">{bp.description}</p>
                   {m?.lastRunAt && (
-                    <div className="text-xs text-slate-500 mt-1">
+                    <div className="text-xs text-text-muted mt-1">
                       Last run {new Date(m.lastRunAt).toLocaleString()}
                       {m.nextRunAt && (
                         <>
@@ -156,7 +173,7 @@ export function ManagersPanel() {
                     </div>
                   )}
                   {m?.lastRunSummary && (
-                    <div className="text-xs text-slate-700 italic mt-1 line-clamp-2">
+                    <div className="text-xs text-text-primary italic mt-1 line-clamp-2">
                       “{m.lastRunSummary}”
                     </div>
                   )}
@@ -204,37 +221,37 @@ export function ManagersPanel() {
         })}
       </div>
 
-      <div className="rounded-xl border border-slate-200 p-4">
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+      <div className="rounded-xl border border-border-default p-4">
+        <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
           <FileText size={12} /> Recent digests · {digests.length}
         </div>
         {digests.length === 0 ? (
-          <div className="text-xs text-slate-400">
+          <div className="text-xs text-text-muted">
             No digests yet. Enable a manager and run it to see its brief here.
           </div>
         ) : (
           <div className="space-y-2">
             {digests.map((d) => (
-              <div key={d.id} className="bg-white border border-slate-200 rounded-lg">
+              <div key={d.id} className="bg-surface border border-border-default rounded-lg">
                 <button
-                  className="w-full flex items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  className="w-full flex items-center justify-between px-3 py-2 text-left text-sm hover:bg-surface-muted"
                   onClick={() =>
                     setExpandedDigestId((cur) => (cur === d.id ? null : d.id))
                   }
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="badge bg-slate-100 text-slate-600 capitalize text-[10px]">
+                      <span className="badge bg-surface-muted text-text-secondary capitalize text-[10px]">
                         {d.role.replace(/_/g, ' ')}
                       </span>
-                      <span className="text-[10px] text-slate-400 capitalize">
+                      <span className="text-[10px] text-text-muted capitalize">
                         {d.cadence}
                       </span>
-                      <span className="text-[10px] text-slate-400">
+                      <span className="text-[10px] text-text-muted">
                         {new Date(d.createdAt).toLocaleString()}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-700 mt-0.5 line-clamp-1 italic">
+                    <div className="text-xs text-text-primary mt-0.5 line-clamp-1 italic">
                       {d.summary}
                     </div>
                   </div>
@@ -250,15 +267,15 @@ export function ManagersPanel() {
                       </span>
                     )}
                     {expandedDigestId === d.id ? (
-                      <ChevronDown size={14} className="text-slate-400" />
+                      <ChevronDown size={14} className="text-text-muted" />
                     ) : (
-                      <ChevronRight size={14} className="text-slate-400" />
+                      <ChevronRight size={14} className="text-text-muted" />
                     )}
                   </div>
                 </button>
                 {expandedDigestId === d.id && (
-                  <div className="border-t border-slate-100 px-3 py-3">
-                    <pre className="text-xs bg-slate-50 rounded p-3 overflow-auto max-h-80 whitespace-pre-wrap font-sans">
+                  <div className="border-t border-border-subtle px-3 py-3">
+                    <pre className="text-xs bg-surface-muted rounded p-3 overflow-auto max-h-80 whitespace-pre-wrap font-sans">
                       {d.content}
                     </pre>
                   </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plug, Check, AlertTriangle, ArrowRight, Unplug } from 'lucide-react';
 import { api } from '../../../api/client';
+import { ConfirmDialog, toast } from '../../../components/ui';
 
 type ProviderKey = 'hubspot' | 'salesforce' | 'pipedrive';
 
@@ -52,6 +53,8 @@ export function CrmWizard() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [openConnId, setOpenConnId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [disconnectTarget, setDisconnectTarget] = useState<string | null>(null);
+  const [disconnectBusy, setDisconnectBusy] = useState(false);
 
   useEffect(() => {
     void api.get<ProviderInfo[]>('/crm/providers').then(setProviders).catch(() => setProviders([]));
@@ -80,22 +83,31 @@ export function CrmWizard() {
       // Open a popup to perform the consent flow.
       const w = window.open(r.authorizeUrl, 'crm_oauth', 'width=600,height=720');
       if (!w) {
-        alert('Please allow popups and try again.');
+        toast.error('Please allow popups and try again.');
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to start OAuth');
+      toast.error(err instanceof Error ? err.message : 'Failed to start OAuth');
     }
   }
 
-  async function disconnect(id: string) {
-    if (!confirm('Disconnect this CRM? Saved field mappings will remain.')) return;
-    await api.post(`/crm/connections/${id}/disconnect`, {});
-    setRefreshKey((k) => k + 1);
+  async function submitDisconnect() {
+    if (!disconnectTarget) return;
+    setDisconnectBusy(true);
+    try {
+      await api.post(`/crm/connections/${disconnectTarget}/disconnect`, {});
+      toast.success('CRM disconnected');
+      setDisconnectTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Disconnect failed');
+    } finally {
+      setDisconnectBusy(false);
+    }
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 p-4">
-      <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+    <div className="rounded-xl border border-border-default p-4">
+      <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
         <Plug size={12} /> CRM wizard
       </div>
 
@@ -110,11 +122,11 @@ export function CrmWizard() {
                   ? 'border-emerald-200 bg-emerald-50/40'
                   : conn?.status === 'error'
                     ? 'border-red-200 bg-red-50/40'
-                    : 'border-slate-200 bg-white'
+                    : 'border-border-default bg-surface'
               }`}
             >
               <div className="flex items-start justify-between">
-                <div className="font-medium text-slate-900">{p.name}</div>
+                <div className="font-medium text-text-primary">{p.name}</div>
                 {conn?.status === 'connected' ? (
                   <span className="badge bg-emerald-100 text-emerald-700">
                     <Check size={10} /> Connected
@@ -124,7 +136,7 @@ export function CrmWizard() {
                     <AlertTriangle size={10} /> Error
                   </span>
                 ) : (
-                  <span className="badge bg-slate-100 text-slate-500">Not connected</span>
+                  <span className="badge bg-surface-muted text-text-muted">Not connected</span>
                 )}
               </div>
               <a
@@ -146,7 +158,7 @@ export function CrmWizard() {
                     </button>
                     <button
                       className="btn-ghost text-xs text-red-600"
-                      onClick={() => disconnect(conn.id)}
+                      onClick={() => setDisconnectTarget(conn.id)}
                       aria-label="Disconnect"
                     >
                       <Unplug size={14} />
@@ -176,6 +188,18 @@ export function CrmWizard() {
           onSaved={() => setRefreshKey((k) => k + 1)}
         />
       )}
+      <ConfirmDialog
+        open={disconnectTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDisconnectTarget(null);
+        }}
+        title="Disconnect this CRM?"
+        description="Saved field mappings will remain and can be reused if you reconnect later."
+        confirmLabel="Disconnect"
+        destructive
+        loading={disconnectBusy}
+        onConfirm={submitDisconnect}
+      />
     </div>
   );
 }
@@ -223,7 +247,10 @@ function MappingEditor({
       await api.put(`/crm/connections/${connectionId}/mappings`, {
         mappings: mappings.filter((m) => m.localField && m.remoteField),
       });
+      toast.success('Field mappings saved');
       onSaved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save mappings');
     } finally {
       setSaving(false);
     }
@@ -231,11 +258,15 @@ function MappingEditor({
 
   async function testPush() {
     setTestResult(null);
-    const r = await api.post<{ endpoint: string; payload: unknown }>(
-      `/crm/connections/${connectionId}/test-push`,
-      {},
-    );
-    setTestResult(r);
+    try {
+      const r = await api.post<{ endpoint: string; payload: unknown }>(
+        `/crm/connections/${connectionId}/test-push`,
+        {},
+      );
+      setTestResult(r);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Test push failed');
+    }
   }
 
   function updateRow(index: number, patch: Partial<Mapping>) {
@@ -253,7 +284,7 @@ function MappingEditor({
 
   if (!fields) {
     return (
-      <div className="mt-3 border-t border-slate-200 pt-3 text-xs text-slate-400">Loading…</div>
+      <div className="mt-3 border-t border-border-default pt-3 text-xs text-text-muted">Loading…</div>
     );
   }
 
@@ -262,9 +293,9 @@ function MappingEditor({
   const remoteFields = fields.remote[tab];
 
   return (
-    <div className="mt-3 border-t border-slate-200 pt-3 space-y-3">
+    <div className="mt-3 border-t border-border-default pt-3 space-y-3">
       <div className="flex items-center justify-between">
-        <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+        <div className="text-xs font-medium text-text-muted uppercase tracking-wide">
           Field mapping
         </div>
         <button className="btn-ghost text-xs" onClick={onClose}>
@@ -272,7 +303,7 @@ function MappingEditor({
         </button>
       </div>
 
-      <div className="flex gap-1 border-b border-slate-200 -mb-px">
+      <div className="flex gap-1 border-b border-border-default -mb-px">
         {ENTITY_TABS.map((e) => (
           <button
             key={e}
@@ -280,7 +311,7 @@ function MappingEditor({
             className={`px-3 py-1.5 text-xs font-medium border-b-2 -mb-px capitalize ${
               tab === e
                 ? 'border-brand-500 text-brand-700'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                : 'border-transparent text-text-muted hover:text-text-primary'
             }`}
           >
             {e}
@@ -290,7 +321,7 @@ function MappingEditor({
 
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-slate-500 border-b border-slate-200">
+          <tr className="text-text-muted border-b border-border-default">
             <th className="text-left py-1.5 font-medium">Local field</th>
             <th className="text-left py-1.5 font-medium">Remote field</th>
             <th className="text-left py-1.5 font-medium">Direction</th>
@@ -301,7 +332,7 @@ function MappingEditor({
           {rowsForTab.map((row) => {
             const index = mappings.indexOf(row);
             return (
-              <tr key={index} className="border-b border-slate-100">
+              <tr key={index} className="border-b border-border-subtle">
                 <td className="py-1.5 pr-2">
                   <select
                     className="input text-xs h-8"
@@ -339,7 +370,7 @@ function MappingEditor({
                 </td>
                 <td className="py-1.5 text-right">
                   <button
-                    className="text-slate-300 hover:text-red-500 p-1"
+                    className="text-text-muted hover:text-red-500 p-1"
                     onClick={() => removeRow(index)}
                     aria-label="Remove"
                   >
@@ -371,14 +402,14 @@ function MappingEditor({
       </div>
 
       {testResult && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
-          <div className="font-medium text-slate-700 mb-1">Target endpoint</div>
+        <div className="rounded-lg border border-border-default bg-surface-muted p-3 text-xs">
+          <div className="font-medium text-text-primary mb-1">Target endpoint</div>
           <code className="text-[11px] break-all block mb-2">{testResult.endpoint}</code>
-          <div className="font-medium text-slate-700 mb-1">Sample payload</div>
+          <div className="font-medium text-text-primary mb-1">Sample payload</div>
           <pre className="overflow-auto max-h-48 text-[11px]">
             {JSON.stringify(testResult.payload, null, 2)}
           </pre>
-          <div className="text-slate-500 mt-2">
+          <div className="text-text-muted mt-2">
             This is a dry run only — no record was created in the remote CRM.
           </div>
         </div>

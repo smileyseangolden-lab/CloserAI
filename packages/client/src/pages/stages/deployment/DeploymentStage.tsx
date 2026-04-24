@@ -4,6 +4,7 @@ import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
 import { CrmWizard } from './CrmWizard';
+import { ConfirmDialog, PromptDialog, toast } from '../../../components/ui';
 
 interface DeploymentRow {
   id: string;
@@ -40,6 +41,9 @@ export function DeploymentStage() {
   const [deployments, setDeployments] = useState<DeploymentRow[]>([]);
   const [rules, setRules] = useState<ComplianceRow[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [killTarget, setKillTarget] = useState<DeploymentRow | null>(null);
+  const [resumeTarget, setResumeTarget] = useState<DeploymentRow | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
   useEffect(() => {
     void Promise.all([
@@ -53,19 +57,40 @@ export function DeploymentStage() {
       .catch(() => undefined);
   }, [refreshKey]);
 
-  async function kill(id: string) {
-    const reason = prompt('Reason for activating the kill switch?') ?? 'manual';
-    await api.post(`/deployments/${id}/kill`, { reason });
-    setRefreshKey((k) => k + 1);
+  async function submitKill(reason: string) {
+    if (!killTarget) return;
+    setActionBusy(true);
+    try {
+      await api.post(`/deployments/${killTarget.id}/kill`, {
+        reason: reason.trim() || 'manual',
+      });
+      toast.success(`Kill switch activated on ${killTarget.name}`);
+      setKillTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not activate kill switch');
+    } finally {
+      setActionBusy(false);
+    }
   }
 
-  async function resume(id: string) {
-    if (!confirm('Resume this deployment? It will go live immediately.')) return;
-    await api.post(`/deployments/${id}/resume`, {});
-    setRefreshKey((k) => k + 1);
+  async function submitResume() {
+    if (!resumeTarget) return;
+    setActionBusy(true);
+    try {
+      await api.post(`/deployments/${resumeTarget.id}/resume`, {});
+      toast.success(`${resumeTarget.name} is live`);
+      setResumeTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Resume failed');
+    } finally {
+      setActionBusy(false);
+    }
   }
 
   return (
+    <>
     <StepAssistant
       key={`dep-${refreshKey}`}
       stage={stage}
@@ -73,12 +98,12 @@ export function DeploymentStage() {
       sidePanel={
         <div className="space-y-4">
           <CrmWizard />
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               <Rocket size={12} /> Deployments · {deployments.length}
             </div>
             {deployments.length === 0 && (
-              <div className="text-xs text-slate-400">
+              <div className="text-xs text-text-muted">
                 Approve a draft and the assistant writes a deployments row that
                 bundles your agents, ICPs and cadences.
               </div>
@@ -88,12 +113,12 @@ export function DeploymentStage() {
               return (
                 <div
                   key={d.id}
-                  className="bg-white rounded-lg border border-slate-200 p-3 mb-2"
+                  className="bg-surface rounded-lg border border-border-default p-3 mb-2"
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">
-                      <div className="font-medium text-slate-900 truncate">{d.name}</div>
-                      <div className="text-xs text-slate-500">
+                      <div className="font-medium text-text-primary truncate">{d.name}</div>
+                      <div className="text-xs text-text-muted">
                         {(d.assignedAgentIds ?? []).length} agents ·{' '}
                         {(d.icpTierIds ?? []).length} ICP tiers ·{' '}
                         {(d.campaignIds ?? []).length} campaigns
@@ -109,32 +134,32 @@ export function DeploymentStage() {
                   )}
                   {cadences.length > 0 && (
                     <div className="mt-3">
-                      <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wide mb-1.5">
+                      <div className="text-[11px] font-medium text-text-muted uppercase tracking-wide mb-1.5">
                         Cadence ({cadences.length} steps)
                       </div>
                       <ol className="space-y-1">
                         {cadences.slice(0, 6).map((c, i) => (
                           <li
                             key={i}
-                            className="text-xs flex items-center gap-2 bg-slate-50 px-2.5 py-1 rounded"
+                            className="text-xs flex items-center gap-2 bg-surface-muted px-2.5 py-1 rounded"
                           >
-                            <span className="font-mono text-slate-400 w-6">#{i + 1}</span>
+                            <span className="font-mono text-text-muted w-6">#{i + 1}</span>
                             <span className="badge bg-brand-50 text-brand-700 text-[10px] capitalize">
                               {c.channel?.replace(/_/g, ' ') ?? 'step'}
                             </span>
                             {(c.delayDays || c.delayHours) && (
-                              <span className="text-slate-500">
+                              <span className="text-text-muted">
                                 wait {c.delayDays ?? 0}d {c.delayHours ?? 0}h
                               </span>
                             )}
                             {c.subject && (
-                              <span className="truncate text-slate-700">{c.subject}</span>
+                              <span className="truncate text-text-primary">{c.subject}</span>
                             )}
                           </li>
                         ))}
                       </ol>
                       {cadences.length > 6 && (
-                        <div className="text-xs text-slate-400 mt-1">
+                        <div className="text-xs text-text-muted mt-1">
                           + {cadences.length - 6} more steps
                         </div>
                       )}
@@ -142,13 +167,13 @@ export function DeploymentStage() {
                   )}
                   <div className="flex gap-2 mt-3">
                     {d.status === 'paused' || d.killSwitchActivatedAt ? (
-                      <button className="btn-secondary" onClick={() => resume(d.id)}>
+                      <button className="btn-secondary" onClick={() => setResumeTarget(d)}>
                         <Play size={12} /> Resume
                       </button>
                     ) : (
                       <button
                         className="btn-secondary text-red-600 hover:bg-red-50"
-                        onClick={() => kill(d.id)}
+                        onClick={() => setKillTarget(d)}
                       >
                         <Pause size={12} /> Kill switch
                       </button>
@@ -159,30 +184,30 @@ export function DeploymentStage() {
             })}
           </div>
 
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               <ShieldCheck size={12} /> Compliance · {rules.length} rules
             </div>
             <div className="space-y-1.5 max-h-56 overflow-y-auto">
               {rules.length === 0 && (
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-text-muted">
                   Approval seeds CAN-SPAM, GDPR, CCPA and LinkedIn ToS defaults.
                 </div>
               )}
               {rules.map((r) => (
                 <div
                   key={r.id}
-                  className="text-xs bg-white border border-slate-200 rounded px-2.5 py-1.5"
+                  className="text-xs bg-surface border border-border-default rounded px-2.5 py-1.5"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-slate-800">{r.title}</span>
+                    <span className="font-medium text-text-primary">{r.title}</span>
                     {r.enabled ? (
                       <span className="text-emerald-600">on</span>
                     ) : (
-                      <span className="text-slate-400">off</span>
+                      <span className="text-text-muted">off</span>
                     )}
                   </div>
-                  <div className="text-slate-500 capitalize">
+                  <div className="text-text-muted capitalize">
                     {r.jurisdiction.replace(/_/g, ' ')} · {r.ruleType.replace(/_/g, ' ')}
                   </div>
                 </div>
@@ -192,16 +217,56 @@ export function DeploymentStage() {
         </div>
       }
     />
+    <PromptDialog
+      open={killTarget !== null}
+      onOpenChange={(open) => {
+        if (!open) setKillTarget(null);
+      }}
+      title="Activate kill switch?"
+      description={
+        killTarget ? (
+          <>
+            This halts all outbound for <strong>{killTarget.name}</strong>. Leave a reason
+            for the audit log.
+          </>
+        ) : null
+      }
+      label="Reason"
+      placeholder="e.g. deliverability issue, compliance review…"
+      confirmLabel="Activate kill switch"
+      destructive
+      loading={actionBusy}
+      onConfirm={submitKill}
+    />
+    <ConfirmDialog
+      open={resumeTarget !== null}
+      onOpenChange={(open) => {
+        if (!open) setResumeTarget(null);
+      }}
+      title="Resume deployment?"
+      description={
+        resumeTarget ? (
+          <>
+            <strong>{resumeTarget.name}</strong> will go live immediately and resume outbound
+            activity.
+          </>
+        ) : null
+      }
+      confirmLabel="Resume"
+      loading={actionBusy}
+      onConfirm={submitResume}
+    />
+    </>
   );
 }
 
 function DepStatus({ status }: { status: DeploymentRow['status'] }) {
   const styles: Record<DeploymentRow['status'], string> = {
-    draft: 'bg-slate-100 text-slate-500',
+    draft: 'bg-surface-muted text-text-muted',
     pending_pilot: 'bg-amber-100 text-amber-700',
     live: 'bg-emerald-100 text-emerald-700',
     paused: 'bg-red-100 text-red-700',
-    completed: 'bg-slate-100 text-slate-500',
+    completed: 'bg-surface-muted text-text-muted',
   };
   return <span className={`badge ${styles[status]} capitalize`}>{status.replace(/_/g, ' ')}</span>;
 }

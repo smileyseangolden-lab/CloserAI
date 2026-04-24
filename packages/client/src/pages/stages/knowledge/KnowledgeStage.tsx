@@ -3,6 +3,7 @@ import { BookOpen, FileText, Globe2, Search, Sparkles, Trash2, Upload } from 'lu
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
+import { ConfirmDialog, toast } from '../../../components/ui';
 
 interface KnowledgeRow {
   id: string;
@@ -35,6 +36,9 @@ export function KnowledgeStage() {
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [autoResult, setAutoResult] = useState<{ count: number } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<KnowledgeRow | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [autoConfirmOpen, setAutoConfirmOpen] = useState(false);
 
   useEffect(() => {
     void api
@@ -52,9 +56,12 @@ export function KnowledgeStage() {
         title: pasteTitle.trim(),
         content: pasteContent.trim(),
       });
+      toast.success('Knowledge entry added');
       setPasteTitle('');
       setPasteContent('');
       setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save entry');
     } finally {
       setBusy(null);
     }
@@ -65,23 +72,39 @@ export function KnowledgeStage() {
     setBusy('url');
     try {
       await api.post('/knowledge/ingest-url', { url: urlInput.trim() });
+      toast.success('URL ingested');
       setUrlInput('');
       setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ingest failed');
     } finally {
       setBusy(null);
     }
   }
 
-  async function remove(id: string) {
-    if (!confirm('Delete this knowledge entry?')) return;
-    await api.delete(`/knowledge/${id}`);
-    setRefreshKey((k) => k + 1);
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    try {
+      await api.delete(`/knowledge/${deleteTarget.id}`);
+      toast.success('Knowledge entry removed');
+      setDeleteTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setDeleteBusy(false);
+    }
   }
 
   async function runSearch() {
     if (!searchQ.trim()) return setHits(null);
-    const r = await api.post<SearchHit[]>('/knowledge/search', { q: searchQ.trim() });
-    setHits(r);
+    try {
+      const r = await api.post<SearchHit[]>('/knowledge/search', { q: searchQ.trim() });
+      setHits(r);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Search failed');
+    }
   }
 
   async function uploadPdf(file: File) {
@@ -92,38 +115,41 @@ export function KnowledgeStage() {
         filename: file.name,
         base64,
       });
+      toast.success(`${file.name} uploaded`);
       setRefreshKey((k) => k + 1);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Upload failed');
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setBusy(null);
     }
   }
 
-  async function autoGenerate() {
-    if (!confirm('Generate seed battlecards, FAQs, and objection playbooks from your approved profile + value props?')) return;
+  async function confirmAutoGenerate() {
     setBusy('auto');
     setAutoResult(null);
+    setAutoConfirmOpen(false);
     try {
       const r = await api.post<{ count: number }>('/knowledge/auto-generate', {});
       setAutoResult(r);
+      toast.success(`Generated ${r.count} knowledge entries`);
       setRefreshKey((k) => k + 1);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Generation failed');
+      toast.error(err instanceof Error ? err.message : 'Generation failed');
     } finally {
       setBusy(null);
     }
   }
 
   return (
+    <>
     <StepAssistant
       key={`kn-${refreshKey}`}
       stage={stage}
       onApproved={() => setRefreshKey((k) => k + 1)}
       sidePanel={
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               <Upload size={12} /> Add to library
             </div>
             <div className="space-y-2 mb-3">
@@ -148,7 +174,7 @@ export function KnowledgeStage() {
                 {busy === 'paste' ? 'Embedding…' : 'Add pasted entry'}
               </button>
             </div>
-            <div className="border-t border-slate-200 pt-3 space-y-3">
+            <div className="border-t border-border-default pt-3 space-y-3">
               <div>
                 <div className="flex gap-2">
                   <input
@@ -165,7 +191,7 @@ export function KnowledgeStage() {
                     <Globe2 size={12} /> Fetch
                   </button>
                 </div>
-                <div className="text-xs text-slate-400 mt-1">
+                <div className="text-xs text-text-muted mt-1">
                   Strips HTML and embeds the first ~20k chars.
                 </div>
               </div>
@@ -188,14 +214,14 @@ export function KnowledgeStage() {
                 >
                   <FileText size={12} /> {busy === 'pdf' ? 'Parsing…' : 'Upload PDF'}
                 </button>
-                <div className="text-xs text-slate-400 mt-1">
+                <div className="text-xs text-text-muted mt-1">
                   PDFs are chunked, embedded, and searchable immediately.
                 </div>
               </div>
               <div>
                 <button
                   className="btn-primary w-full justify-center"
-                  onClick={autoGenerate}
+                  onClick={() => setAutoConfirmOpen(true)}
                   disabled={busy === 'auto'}
                 >
                   <Sparkles size={12} />{' '}
@@ -210,8 +236,8 @@ export function KnowledgeStage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               <Search size={12} /> Search RAG index
             </div>
             <div className="flex gap-2">
@@ -231,17 +257,17 @@ export function KnowledgeStage() {
             {hits && (
               <div className="mt-3 space-y-1.5">
                 {hits.length === 0 && (
-                  <div className="text-xs text-slate-400">No hits.</div>
+                  <div className="text-xs text-text-muted">No hits.</div>
                 )}
                 {hits.map((h) => (
                   <div
                     key={h.id}
-                    className="text-xs bg-slate-50 rounded px-2.5 py-1.5 border border-slate-200"
+                    className="text-xs bg-surface-muted rounded px-2.5 py-1.5 border border-border-default"
                   >
-                    <div className="font-medium text-slate-800">{h.title}</div>
-                    <div className="text-slate-600 line-clamp-2">{h.content}</div>
+                    <div className="font-medium text-text-primary">{h.title}</div>
+                    <div className="text-text-secondary line-clamp-2">{h.content}</div>
                     {h.similarity !== null && (
-                      <div className="text-[10px] text-slate-400 mt-0.5">
+                      <div className="text-[10px] text-text-muted mt-0.5">
                         sim {(h.similarity * 100).toFixed(0)}% · {h.source}
                       </div>
                     )}
@@ -251,22 +277,22 @@ export function KnowledgeStage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               <BookOpen size={12} /> Library · {entries.length} entries
             </div>
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {entries.length === 0 && (
-                <div className="text-xs text-slate-400">Empty. Add entries above.</div>
+                <div className="text-xs text-text-muted">Empty. Add entries above.</div>
               )}
               {entries.map((e) => (
                 <div
                   key={e.id}
-                  className="flex items-start justify-between bg-white rounded-lg border border-slate-200 p-2.5"
+                  className="flex items-start justify-between bg-surface rounded-lg border border-border-default p-2.5"
                 >
                   <div className="min-w-0 flex-1 pr-2">
                     <div className="flex items-center gap-2">
-                      <span className="badge bg-slate-100 text-slate-600 text-[10px] capitalize">
+                      <span className="badge bg-surface-muted text-text-secondary text-[10px] capitalize">
                         {e.source.replace(/_/g, ' ')}
                       </span>
                       {e.embeddedAt ? (
@@ -276,11 +302,11 @@ export function KnowledgeStage() {
                       )}
                     </div>
                     <div className="text-sm font-medium truncate">{e.title}</div>
-                    <div className="text-xs text-slate-500 line-clamp-1">{e.content}</div>
+                    <div className="text-xs text-text-muted line-clamp-1">{e.content}</div>
                   </div>
                   <button
-                    onClick={() => remove(e.id)}
-                    className="text-slate-300 hover:text-red-500 p-1"
+                    onClick={() => setDeleteTarget(e)}
+                    className="text-text-muted hover:text-red-500 p-1"
                     aria-label="Delete"
                   >
                     <Trash2 size={14} />
@@ -292,6 +318,34 @@ export function KnowledgeStage() {
         </div>
       }
     />
+    <ConfirmDialog
+      open={deleteTarget !== null}
+      onOpenChange={(open) => {
+        if (!open) setDeleteTarget(null);
+      }}
+      title="Delete knowledge entry?"
+      description={
+        deleteTarget ? (
+          <>
+            This will permanently remove <strong>{deleteTarget.title}</strong> from your
+            knowledge base.
+          </>
+        ) : null
+      }
+      confirmLabel="Delete"
+      destructive
+      loading={deleteBusy}
+      onConfirm={confirmDelete}
+    />
+    <ConfirmDialog
+      open={autoConfirmOpen}
+      onOpenChange={setAutoConfirmOpen}
+      title="Auto-generate knowledge?"
+      description="Seeds battlecards, FAQs, and objection playbooks from your approved profile + value props. You can review and edit everything afterwards."
+      confirmLabel="Generate"
+      onConfirm={confirmAutoGenerate}
+    />
+    </>
   );
 }
 

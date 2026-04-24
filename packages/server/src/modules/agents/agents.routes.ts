@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/index.js';
 import { agentProfiles, agentKnowledgeBase } from '../../db/schema.js';
@@ -117,18 +117,36 @@ const agentSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+const listQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 agentsRouter.get('/', async (req, res, next) => {
   try {
-    const rows = await db
-      .select()
-      .from(agentProfiles)
-      .where(
-        and(
-          eq(agentProfiles.organizationId, req.auth!.organizationId),
-          isNull(agentProfiles.deletedAt),
-        ),
-      );
-    res.json(rows);
+    const q = listQuerySchema.parse(req.query);
+    const where = and(
+      eq(agentProfiles.organizationId, req.auth!.organizationId),
+      isNull(agentProfiles.deletedAt),
+    );
+
+    const [rows, totalRow] = await Promise.all([
+      db
+        .select()
+        .from(agentProfiles)
+        .where(where)
+        .orderBy(desc(agentProfiles.createdAt))
+        .limit(q.limit)
+        .offset(q.offset),
+      db.select({ total: sql<number>`count(*)::int` }).from(agentProfiles).where(where),
+    ]);
+
+    res.json({
+      data: rows,
+      total: totalRow[0]?.total ?? 0,
+      limit: q.limit,
+      offset: q.offset,
+    });
   } catch (err) {
     next(err);
   }

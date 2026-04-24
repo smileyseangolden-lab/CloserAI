@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { useAuthStore } from './stores/auth';
 import { AppLayout } from './components/layout/AppLayout';
+import { ErrorBoundary, LoadingBlock } from './components/ui';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -16,6 +17,7 @@ import { OpportunitiesPage } from './pages/OpportunitiesPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
+import { AuditLogPage } from './pages/AuditLogPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { CrmCallbackPage } from './pages/oauth/CrmCallbackPage';
 import { DashboardBuilderPage } from './pages/dashboards/DashboardBuilderPage';
@@ -23,7 +25,7 @@ import { DashboardBuilderPage } from './pages/dashboards/DashboardBuilderPage';
 function RequireAuth({ children }: { children: JSX.Element }) {
   const user = useAuthStore((s) => s.user);
   const loading = useAuthStore((s) => s.loading);
-  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
+  if (loading) return <LoadingBlock label="Checking your session…" className="h-screen" />;
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }
@@ -35,6 +37,7 @@ export default function App() {
   }, [loadCurrentUser]);
 
   return (
+    <ErrorBoundary>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -72,8 +75,10 @@ export default function App() {
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="settings/*" element={<SettingsPage />} />
         <Route path="admin/integrations" element={<IntegrationsPage />} />
+        <Route path="admin/audit" element={<AuditLogPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </ErrorBoundary>
   );
 }

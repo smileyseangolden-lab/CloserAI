@@ -3,6 +3,7 @@ import { Bot, Mail, Linkedin, MessageSquare, Send, Sparkles, Users, Check } from
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
+import { toast } from '../../../components/ui';
 
 interface CatalogAgent {
   key: string;
@@ -52,8 +53,8 @@ export function AgentBuilderStage() {
 
   useEffect(() => {
     void api
-      .get<AgentRow[]>('/agents')
-      .then(setAgents)
+      .get<{ data: AgentRow[] }>('/agents?limit=200')
+      .then((r) => setAgents(r.data ?? []))
       .catch(() => setAgents([]));
   }, [refreshKey]);
 
@@ -77,7 +78,10 @@ export function AgentBuilderStage() {
     setActivating(key);
     try {
       await api.post(`/agents/catalog/${key}/activate`, {});
+      toast.success('Agent activated');
       setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not activate agent');
     } finally {
       setActivating(null);
     }
@@ -90,12 +94,12 @@ export function AgentBuilderStage() {
       onApproved={() => setRefreshKey((k) => k + 1)}
       sidePanel={
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          <div className="rounded-xl border border-border-default p-4">
+            <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
               <Users size={12} /> Squad catalog · {catalog.length} agents
             </div>
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs text-slate-500">Motion:</span>
+              <span className="text-xs text-text-muted">Motion:</span>
               <select
                 className="input h-8 text-xs w-auto"
                 value={motion}
@@ -107,7 +111,7 @@ export function AgentBuilderStage() {
                   </option>
                 ))}
               </select>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-text-muted">
                 {recommendedKeys.size} recommended
               </span>
             </div>
@@ -123,19 +127,19 @@ export function AgentBuilderStage() {
                         ? 'border-emerald-200 bg-emerald-50/40'
                         : isRecommended
                           ? 'border-brand-200 bg-brand-50/30'
-                          : 'border-slate-200 bg-white'
+                          : 'border-border-default bg-surface'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-1 mb-1">
-                      <div className="font-medium text-slate-900 truncate">{c.name}</div>
+                      <div className="font-medium text-text-primary truncate">{c.name}</div>
                       {isRecommended && !isActive && (
                         <span className="badge bg-brand-500 text-white text-[9px]">Rec</span>
                       )}
                     </div>
-                    <div className="text-[10px] text-slate-500 capitalize mb-1">
+                    <div className="text-[10px] text-text-muted capitalize mb-1">
                       {c.category} · {c.channels.join('/')}
                     </div>
-                    <div className="text-slate-600 line-clamp-2 mb-2">{c.description}</div>
+                    <div className="text-text-secondary line-clamp-2 mb-2">{c.description}</div>
                     {isActive ? (
                       <div className="flex items-center gap-1 text-emerald-700">
                         <Check size={12} /> Active
@@ -155,8 +159,8 @@ export function AgentBuilderStage() {
             </div>
           </div>
           {agents.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-              <div className="font-medium text-slate-700 mb-1">Canonical agents</div>
+            <div className="rounded-xl border border-dashed border-border-default p-4 text-sm text-text-muted">
+              <div className="font-medium text-text-primary mb-1">Canonical agents</div>
               No agents yet. Activate from the squad catalog or approve a draft above.
             </div>
           ) : (
@@ -225,21 +229,21 @@ function AgentCard({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-3">
+    <div className="bg-surface rounded-lg border border-border-default p-3">
       <div className="flex items-start justify-between">
         <div className="min-w-0">
-          <div className="font-medium text-slate-900 truncate">{agent.name}</div>
-          <div className="text-xs text-slate-500">
+          <div className="font-medium text-text-primary truncate">{agent.name}</div>
+          <div className="text-xs text-text-muted">
             <span className="capitalize">{agent.agentType}</span> ·{' '}
             <span className="capitalize">{agent.personalityStyle.replace(/_/g, ' ')}</span> ·{' '}
             {agent.isActive ? (
               <span className="text-emerald-600">Active</span>
             ) : (
-              <span className="text-slate-400">Paused</span>
+              <span className="text-text-muted">Paused</span>
             )}
           </div>
           {agent.toneDescription && (
-            <div className="text-xs text-slate-600 mt-1 line-clamp-2">{agent.toneDescription}</div>
+            <div className="text-xs text-text-secondary mt-1 line-clamp-2">{agent.toneDescription}</div>
           )}
         </div>
         <button className="btn-ghost text-xs" onClick={onToggle}>
@@ -247,7 +251,7 @@ function AgentCard({
         </button>
       </div>
       {open && (
-        <div className="mt-3 border-t border-slate-100 pt-3">
+        <div className="mt-3 border-t border-border-subtle pt-3">
           <div className="flex gap-2">
             <input
               className="input flex-1 text-sm"
@@ -289,25 +293,25 @@ function ChannelResult({
 }) {
   if (!message) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <div className="text-xs font-medium text-slate-500 uppercase tracking-wide flex items-center gap-1">
+      <div className="rounded-lg border border-border-default bg-surface-muted p-3">
+        <div className="text-xs font-medium text-text-muted uppercase tracking-wide flex items-center gap-1">
           {icon} {label}
         </div>
-        <div className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+        <div className="text-xs text-text-muted mt-1 flex items-center gap-1">
           <Sparkles size={10} /> Not generated yet
         </div>
       </div>
     );
   }
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="text-xs font-medium text-slate-500 uppercase tracking-wide flex items-center gap-1">
+    <div className="rounded-lg border border-border-default bg-surface p-3">
+      <div className="text-xs font-medium text-text-muted uppercase tracking-wide flex items-center gap-1">
         {icon} {label}
       </div>
       {message.subject && (
-        <div className="text-sm font-medium mt-1 text-slate-900">{message.subject}</div>
+        <div className="text-sm font-medium mt-1 text-text-primary">{message.subject}</div>
       )}
-      <div className="text-xs text-slate-700 whitespace-pre-wrap mt-1 max-h-40 overflow-y-auto">
+      <div className="text-xs text-text-primary whitespace-pre-wrap mt-1 max-h-40 overflow-y-auto">
         {message.body}
       </div>
     </div>

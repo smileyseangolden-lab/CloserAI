@@ -1,8 +1,30 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
-import { Plus } from 'lucide-react';
+import {
+  Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  EmptyState,
+  Field,
+  FieldError,
+  FieldLabel,
+  Input,
+  Pagination,
+  SkeletonCard,
+  SkeletonRow,
+  toast,
+} from '../components/ui';
+import { Plus, Users } from 'lucide-react';
 
 interface Lead {
   id: string;
@@ -16,45 +38,129 @@ interface Lead {
 }
 
 const statusColors: Record<string, string> = {
-  new: 'bg-slate-100 text-slate-700',
-  contacted: 'bg-blue-100 text-blue-700',
-  engaging: 'bg-indigo-100 text-indigo-700',
-  warm: 'bg-amber-100 text-amber-700',
-  hot: 'bg-orange-100 text-orange-700',
-  qualified: 'bg-emerald-100 text-emerald-700',
-  disqualified: 'bg-red-100 text-red-700',
-  converted: 'bg-green-100 text-green-700',
-  lost: 'bg-slate-100 text-slate-500',
+  new: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  contacted: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+  engaging: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300',
+  warm: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  hot: 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300',
+  qualified: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+  disqualified: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+  converted: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300',
+  lost: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
 };
 
 export function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    setLoading(true);
+    const offset = (page - 1) * pageSize;
     void api
-      .get<{ data: Lead[] }>('/leads?limit=100')
-      .then((res) => setLeads(res.data))
+      .get<{ data: Lead[]; total: number }>(`/leads?limit=${pageSize}&offset=${offset}`)
+      .then((res) => {
+        setLeads(res.data);
+        setTotal(res.total ?? res.data.length);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [page, pageSize, refreshKey]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize]);
+
+  if (!loading && leads.length === 0 && total === 0) {
+    return (
+      <div className="p-4 md:p-8 max-w-7xl">
+        <PageHeader title="Leads" subtitle="All leads in your workspace" />
+        <div className="card">
+          <EmptyState
+            icon={Users}
+            title="No leads yet"
+            description="Add a lead manually, or generate a batch from the Data Sources stage."
+            action={
+              <>
+                <button
+                  className="btn-primary"
+                  onClick={() => setCreateOpen(true)}
+                >
+                  <Plus size={16} /> Add lead
+                </button>
+                <Link to="/stages/data-sources" className="btn-secondary">
+                  Generate leads
+                </Link>
+              </>
+            }
+          />
+        </div>
+        <CreateLeadDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          onCreated={() => {
+            setRefreshKey((k) => k + 1);
+            setPage(1);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-4 md:p-8 max-w-7xl">
       <PageHeader
         title="Leads"
         subtitle="All leads in your workspace"
         actions={
-          <button className="btn-primary">
+          <button className="btn-primary" onClick={() => setCreateOpen(true)}>
             <Plus size={16} />
             Add lead
           </button>
         }
       />
 
-      <div className="card overflow-hidden">
+      {/* Mobile: stacked cards */}
+      <div className="md:hidden space-y-3">
+        {loading && Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+        {!loading &&
+          leads.map((lead) => (
+            <Link
+              key={lead.id}
+              to={`/leads/${lead.id}`}
+              className="card p-4 flex flex-col gap-2 hover:border-brand-400 transition"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium text-text-primary truncate">
+                    {lead.companyName}
+                  </div>
+                  <div className="text-xs text-text-muted truncate">
+                    {lead.companyIndustry ?? '—'} · {lead.companySize ?? 'size n/a'}
+                  </div>
+                </div>
+                <ScoreBadge score={lead.leadScore} />
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-text-muted truncate">
+                  {lead.companyLocation ?? ''}
+                </span>
+                <span className={`badge ${statusColors[lead.status] ?? 'bg-slate-100'}`}>
+                  {lead.status}
+                </span>
+              </div>
+            </Link>
+          ))}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden md:block card overflow-hidden">
         <table className="w-full">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr className="text-xs uppercase text-slate-500">
+          <thead className="bg-surface-muted/60 border-b border-border-default">
+            <tr className="text-xs uppercase text-text-muted">
               <th className="text-left px-4 py-3 font-medium">Company</th>
               <th className="text-left px-4 py-3 font-medium">Industry</th>
               <th className="text-left px-4 py-3 font-medium">Size</th>
@@ -64,35 +170,28 @@ export function LeadsPage() {
             </tr>
           </thead>
           <tbody>
-            {loading && (
-              <tr>
-                <td className="px-4 py-10 text-center text-slate-400" colSpan={6}>
-                  Loading...
-                </td>
-              </tr>
-            )}
-            {!loading && leads.length === 0 && (
-              <tr>
-                <td className="px-4 py-10 text-center text-slate-400" colSpan={6}>
-                  No leads yet.
-                </td>
-              </tr>
-            )}
+            {loading &&
+              Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={6} />)}
             {leads.map((lead) => (
-              <tr key={lead.id} className="border-b border-slate-100 hover:bg-slate-50">
+              <tr
+                key={lead.id}
+                className="border-b border-border-subtle hover:bg-surface-muted/50"
+              >
                 <td className="px-4 py-3">
                   <Link
                     to={`/leads/${lead.id}`}
-                    className="font-medium text-slate-900 hover:text-brand-600"
+                    className="font-medium text-text-primary hover:text-brand-600 dark:hover:text-brand-300"
                   >
                     {lead.companyName}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-sm text-slate-600">
+                <td className="px-4 py-3 text-sm text-text-secondary">
                   {lead.companyIndustry ?? '—'}
                 </td>
-                <td className="px-4 py-3 text-sm text-slate-600">{lead.companySize ?? '—'}</td>
-                <td className="px-4 py-3 text-sm text-slate-600">
+                <td className="px-4 py-3 text-sm text-text-secondary">
+                  {lead.companySize ?? '—'}
+                </td>
+                <td className="px-4 py-3 text-sm text-text-secondary">
                   {lead.companyLocation ?? '—'}
                 </td>
                 <td className="px-4 py-3">
@@ -108,16 +207,167 @@ export function LeadsPage() {
           </tbody>
         </table>
       </div>
+
+      <div className="mt-4">
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
+      </div>
+
+      <CreateLeadDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          setRefreshKey((k) => k + 1);
+          setPage(1);
+        }}
+      />
     </div>
+  );
+}
+
+const leadCreateSchema = z.object({
+  companyName: z.string().trim().min(1, 'Company name is required'),
+  companyWebsite: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (v) => !v || /^https?:\/\//i.test(v),
+      'Website should start with http:// or https://',
+    ),
+  companyIndustry: z.string().trim().optional(),
+  companyLocation: z.string().trim().optional(),
+});
+
+type LeadCreateValues = z.infer<typeof leadCreateSchema>;
+
+function CreateLeadDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: () => void;
+}) {
+  const navigate = useNavigate();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting, isValid },
+  } = useForm<LeadCreateValues>({
+    resolver: zodResolver(leadCreateSchema),
+    mode: 'onChange',
+    defaultValues: {
+      companyName: '',
+      companyWebsite: '',
+      companyIndustry: '',
+      companyLocation: '',
+    },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      const payload: Record<string, unknown> = {
+        companyName: values.companyName,
+        source: 'manual',
+      };
+      if (values.companyWebsite?.trim()) payload.companyWebsite = values.companyWebsite.trim();
+      if (values.companyIndustry?.trim())
+        payload.companyIndustry = values.companyIndustry.trim();
+      if (values.companyLocation?.trim())
+        payload.companyLocation = values.companyLocation.trim();
+
+      const created = await api.post<{ id: string }>('/leads', payload);
+      toast.success('Lead added');
+      onCreated();
+      onOpenChange(false);
+      reset();
+      navigate(`/leads/${created.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not add lead');
+    }
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) reset();
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <form onSubmit={onSubmit} noValidate>
+          <DialogHeader>
+            <DialogTitle>Add lead</DialogTitle>
+            <DialogDescription>
+              Create a lead manually. You can enrich and score it after.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <Field>
+              <FieldLabel htmlFor="companyName">Company name</FieldLabel>
+              <Input
+                id="companyName"
+                autoFocus
+                aria-invalid={errors.companyName ? 'true' : 'false'}
+                {...register('companyName')}
+              />
+              <FieldError>{errors.companyName?.message}</FieldError>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="companyWebsite">Website</FieldLabel>
+              <Input
+                id="companyWebsite"
+                placeholder="https://example.com"
+                aria-invalid={errors.companyWebsite ? 'true' : 'false'}
+                {...register('companyWebsite')}
+              />
+              <FieldError>{errors.companyWebsite?.message}</FieldError>
+            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field>
+                <FieldLabel htmlFor="companyIndustry">Industry</FieldLabel>
+                <Input id="companyIndustry" {...register('companyIndustry')} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="companyLocation">Location</FieldLabel>
+                <Input id="companyLocation" {...register('companyLocation')} />
+              </Field>
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={isSubmitting} disabled={!isValid}>
+              Add lead
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function ScoreBadge({ score }: { score: number }) {
   const color =
     score >= 75
-      ? 'bg-emerald-100 text-emerald-700'
+      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
       : score >= 50
-        ? 'bg-amber-100 text-amber-700'
-        : 'bg-slate-100 text-slate-600';
+        ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
   return <span className={`badge ${color}`}>{score}</span>;
 }

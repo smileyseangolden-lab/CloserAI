@@ -1,9 +1,21 @@
-import type { ComponentType } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { ArrowRight, AlertTriangle, Circle, Mail, Target, TrendingDown, TrendingUp, Users } from 'lucide-react';
+import {
+  ArrowRight,
+  AlertTriangle,
+  Circle,
+  Flame,
+  Mail,
+  MailOpen,
+  Target,
+  Trophy,
+  TrendingDown,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
+import { LoadingBlock, StatCard } from '../components/ui';
 import { STAGES, STAGE_BY_ID } from '../workflow/stages';
 
 interface DashboardData {
@@ -144,89 +156,178 @@ export function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-        <div className="card p-5 lg:col-span-2">
-          <div className="flex items-start justify-between mb-3">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500 font-medium">
-                Setup progress
-              </div>
-              <div className="text-2xl font-semibold mt-1">
-                {approvedCount} / {totalStages} stages approved
-              </div>
+      <div className="card p-5 mb-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-wide text-text-muted font-medium">
+              Setup progress
             </div>
-            {nextStage && (
-              <Link to={`/stages/${nextStage.id}`} className="btn-primary">
-                Continue in {nextStage.title} <ArrowRight size={14} />
-              </Link>
-            )}
+            <div className="text-2xl font-semibold mt-1 text-text-primary">
+              {approvedCount} / {totalStages} stages approved
+            </div>
           </div>
-          <div className="flex gap-1 overflow-hidden rounded-full h-2 bg-slate-100 mb-3">
-            {stagesData?.stages.map((s) => (
-              <div
-                key={s.id}
-                className={`flex-1 ${
-                  s.status === 'approved'
-                    ? 'bg-emerald-500'
-                    : s.status === 'in_progress'
-                      ? 'bg-amber-400'
-                      : 'bg-slate-200'
-                }`}
-                title={`${s.title}: ${s.status}`}
-              />
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {stagesData?.stages.map((s) => (
-              <Link
-                key={s.id}
-                to={`/stages/${s.id}`}
-                className="text-xs px-2 py-1 rounded-full border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1"
-              >
-                <StageDot status={s.status} />
-                <span className="text-slate-500">{s.order}.</span>
-                {s.title}
-              </Link>
-            ))}
-          </div>
+          {nextStage && (
+            <Link
+              to={`/stages/${nextStage.id}`}
+              className="btn-primary self-start md:self-auto"
+            >
+              Continue in {nextStage.title} <ArrowRight size={14} />
+            </Link>
+          )}
         </div>
+        <div className="flex gap-1 overflow-hidden rounded-full h-2 bg-surface-muted my-3">
+          {stagesData?.stages.map((s) => (
+            <div
+              key={s.id}
+              className={`flex-1 ${
+                s.status === 'approved'
+                  ? 'bg-emerald-500'
+                  : s.status === 'in_progress'
+                    ? 'bg-amber-400'
+                    : 'bg-surface-muted'
+              }`}
+              title={`${s.title}: ${s.status}`}
+            />
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {stagesData?.stages.map((s) => (
+            <Link
+              key={s.id}
+              to={`/stages/${s.id}`}
+              className="text-xs px-2 py-1 rounded-full border border-border-default hover:bg-surface-muted inline-flex items-center gap-1"
+            >
+              <StageDot status={s.status} />
+              <span className="text-text-muted">{s.order}.</span>
+              {s.title}
+            </Link>
+          ))}
+        </div>
+      </div>
 
-        <div className="grid grid-cols-1 gap-3">
-          <MiniStat
-            icon={Users}
-            label="Leads"
-            value={summary?.leads.total ?? 0}
-            hint={`${summary?.leads.warmCount ?? 0} warm · ${summary?.leads.hotCount ?? 0} hot`}
-          />
-          <MiniStat
-            icon={Target}
-            label="Open pipeline"
-            value={`$${Number(summary?.opportunities.openValue ?? 0).toLocaleString()}`}
-            hint={`${summary?.opportunities.total ?? 0} opps · ${summary?.opportunities.wonCount ?? 0} won`}
-          />
-          <MiniStat
-            icon={Mail}
-            label="Outbound sent"
-            value={summary?.messages.sent ?? 0}
-            hint={`${summary?.messages.replied ?? 0} replies`}
-          />
-        </div>
+      <SectionHeader title="Acquisition" subtitle="Leads and pipeline coverage" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8">
+        <StatCard
+          icon={Users}
+          label="Total leads"
+          value={summary?.leads.total.toLocaleString() ?? '—'}
+          change={`${summary?.leads.newCount ?? 0} new`}
+          sparkline={fauxSeries(summary?.leads.total ?? 0)}
+          sparklineTone="brand"
+        />
+        <StatCard
+          icon={Flame}
+          label="Warm + hot"
+          value={(
+            (summary?.leads.warmCount ?? 0) + (summary?.leads.hotCount ?? 0)
+          ).toLocaleString()}
+          change={`${summary?.leads.hotCount ?? 0} hot`}
+          tone="positive"
+          sparkline={fauxSeries(
+            (summary?.leads.warmCount ?? 0) + (summary?.leads.hotCount ?? 0),
+          )}
+          sparklineTone="positive"
+        />
+        <StatCard
+          icon={Target}
+          label="Qualified"
+          value={(summary?.leads.qualifiedCount ?? 0).toLocaleString()}
+          change={`${summary?.leads.convertedCount ?? 0} converted`}
+          tone="positive"
+          sparkline={fauxSeries(summary?.leads.qualifiedCount ?? 0)}
+          sparklineTone="positive"
+        />
+        <StatCard
+          icon={Circle}
+          label="Active campaigns"
+          value={summary?.campaigns.activeCount ?? 0}
+          change={`${summary?.campaigns.total ?? 0} total`}
+        />
+      </div>
+
+      <SectionHeader title="Engagement" subtitle="Outbound activity and replies" />
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-8">
+        <StatCard
+          icon={Mail}
+          label="Outbound sent"
+          value={(summary?.messages.sent ?? 0).toLocaleString()}
+          sparkline={fauxSeries(summary?.messages.sent ?? 0)}
+          sparklineTone="brand"
+        />
+        <StatCard
+          icon={MailOpen}
+          label="Replies received"
+          value={(summary?.messages.replied ?? 0).toLocaleString()}
+          change={formatReplyRate(summary?.messages.sent, summary?.messages.replied)}
+          tone={
+            replyRateTone(summary?.messages.sent, summary?.messages.replied) ??
+            'neutral'
+          }
+          sparkline={fauxSeries(summary?.messages.replied ?? 0)}
+          sparklineTone="positive"
+        />
+        <StatCard
+          icon={AlertTriangle}
+          label="Anomalies"
+          value={anomalies.filter((a) => a.severity !== 'info').length}
+          change={
+            anomalies.filter((a) => a.severity === 'critical').length > 0
+              ? `${anomalies.filter((a) => a.severity === 'critical').length} critical`
+              : 'All healthy'
+          }
+          tone={
+            anomalies.filter((a) => a.severity === 'critical').length > 0
+              ? 'negative'
+              : 'positive'
+          }
+        />
+      </div>
+
+      <SectionHeader title="Pipeline" subtitle="Open opportunities and won revenue" />
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-8">
+        <StatCard
+          icon={Target}
+          label="Open pipeline"
+          value={`$${Number(summary?.opportunities.openValue ?? 0).toLocaleString()}`}
+          change={`${summary?.opportunities.total ?? 0} open opps`}
+          sparkline={fauxSeries(summary?.opportunities.openValue ?? 0)}
+          sparklineTone="brand"
+        />
+        <StatCard
+          icon={Trophy}
+          label="Won revenue"
+          value={`$${Number(summary?.opportunities.wonValue ?? 0).toLocaleString()}`}
+          change={`${summary?.opportunities.wonCount ?? 0} deals won`}
+          tone="positive"
+          sparkline={fauxSeries(summary?.opportunities.wonValue ?? 0)}
+          sparklineTone="positive"
+        />
+        <StatCard
+          icon={TrendingUp}
+          label="Win rate"
+          value={formatWinRate(
+            summary?.opportunities.total,
+            summary?.opportunities.wonCount,
+          )}
+          change="vs all open opps"
+          tone="positive"
+        />
       </div>
 
       <section className="card p-6 mb-6">
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="font-semibold text-lg">Performance by stage × agent</h2>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-text-muted">
               How each AI agent is performing across the workflow stages where activity is observed.
             </p>
           </div>
         </div>
 
         {stagesData === null ? (
-          <div className="text-sm text-slate-400 py-12 text-center">Loading...</div>
+          <LoadingBlock label="Loading agent performance…" />
         ) : stagesData.agents.length === 0 ? (
-          <div className="text-sm text-slate-500 py-10 text-center">
+          <div className="text-sm text-text-muted py-10 text-center">
             No agents configured yet.{' '}
             <Link to="/stages/agent-builder" className="text-brand-600 font-medium">
               Build your first agent →
@@ -244,23 +345,23 @@ export function DashboardPage() {
             <Link
               key={s.id}
               to={`/stages/${s.id}`}
-              className="border border-slate-200 rounded-xl p-4 hover:border-brand-300 hover:bg-brand-50/40 transition"
+              className="border border-border-default rounded-xl p-4 hover:border-brand-300 hover:bg-brand-50/40 transition"
             >
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-surface-muted text-text-secondary flex items-center justify-center flex-shrink-0">
                   <StageIcon stageId={s.id} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <div className="text-xs font-medium text-slate-400">
+                    <div className="text-xs font-medium text-text-muted">
                       Stage {s.order}
                     </div>
                     <StagePill status={s.status} />
                   </div>
-                  <div className="font-medium text-slate-900 truncate">{s.title}</div>
-                  <div className="text-xs text-slate-500 line-clamp-2 mt-0.5">{s.description}</div>
+                  <div className="font-medium text-text-primary truncate">{s.title}</div>
+                  <div className="text-xs text-text-muted line-clamp-2 mt-0.5">{s.description}</div>
                   {s.hasAgentMetrics && (
-                    <div className="text-xs mt-2 text-slate-500">
+                    <div className="text-xs mt-2 text-text-muted">
                       {summariseAgents(s.perAgent)}
                     </div>
                   )}
@@ -281,13 +382,13 @@ function StageAgentGrid({ data }: { data: StagesAnalytics }) {
       <table className="w-full text-sm border-separate border-spacing-0">
         <thead>
           <tr>
-            <th className="text-left sticky left-0 bg-white z-10 pb-3 pr-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <th className="text-left sticky left-0 bg-surface z-10 pb-3 pr-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
               Agent
             </th>
             {metricStages.map((s) => (
               <th
                 key={s.id}
-                className="text-left pb-3 pr-3 text-xs font-semibold uppercase tracking-wide text-slate-500 min-w-[140px]"
+                className="text-left pb-3 pr-3 text-xs font-semibold uppercase tracking-wide text-text-muted min-w-[140px]"
               >
                 <div className="flex items-center gap-1.5">
                   <StageDot status={s.status} />
@@ -299,16 +400,16 @@ function StageAgentGrid({ data }: { data: StagesAnalytics }) {
         </thead>
         <tbody>
           {data.agents.map((agent) => (
-            <tr key={agent.id} className="border-t border-slate-100">
-              <td className="sticky left-0 bg-white z-10 py-3 pr-3">
-                <div className="font-medium text-slate-900">{agent.name}</div>
-                <div className="text-xs text-slate-500 capitalize">
+            <tr key={agent.id} className="border-t border-border-subtle">
+              <td className="sticky left-0 bg-surface z-10 py-3 pr-3">
+                <div className="font-medium text-text-primary">{agent.name}</div>
+                <div className="text-xs text-text-muted capitalize">
                   {agent.agentType} · {agent.isActive ? 'Active' : 'Paused'}
                 </div>
               </td>
               {metricStages.map((stage) => {
                 const a = stage.perAgent.find((r) => r.agentId === agent.id);
-                if (!a) return <td key={stage.id} className="py-3 pr-3 text-slate-300">—</td>;
+                if (!a) return <td key={stage.id} className="py-3 pr-3 text-text-muted">—</td>;
                 return (
                   <td key={stage.id} className="py-3 pr-3 align-top">
                     <StageAgentCell stageId={stage.id} row={a} />
@@ -325,12 +426,12 @@ function StageAgentGrid({ data }: { data: StagesAnalytics }) {
 
 function StageAgentCell({ stageId, row }: { stageId: string; row: AgentRow }) {
   if (stageId === 'deployment' || stageId === 'pilot') {
-    if (row.sent === 0) return <span className="text-slate-300">No sends yet</span>;
+    if (row.sent === 0) return <span className="text-text-muted">No sends yet</span>;
     return (
       <div>
         <MetricBar label="Reply" value={row.replyRate} />
         <MetricBar label="Open" value={row.openRate} />
-        <div className="text-xs text-slate-500 mt-1">
+        <div className="text-xs text-text-muted mt-1">
           {row.sent.toLocaleString()} sent · {row.replied} replied
           {row.bounced > 0 && ` · ${row.bounced} bounced`}
         </div>
@@ -340,10 +441,10 @@ function StageAgentCell({ stageId, row }: { stageId: string; row: AgentRow }) {
   if (stageId === 'handoff' || stageId === 'optimization') {
     return (
       <div>
-        <div className="text-base font-semibold text-slate-800">
+        <div className="text-base font-semibold text-text-primary">
           ${Number(row.wonValue).toLocaleString()}
         </div>
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-text-muted">
           {row.wonOpps} won · {row.openOpps} open
         </div>
       </div>
@@ -352,14 +453,14 @@ function StageAgentCell({ stageId, row }: { stageId: string; row: AgentRow }) {
   if (stageId === 'agent-builder') {
     return (
       <div>
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-text-muted">
           {row.isActive ? (
             <span className="text-emerald-600 font-medium">Active</span>
           ) : (
-            <span className="text-slate-400">Paused</span>
+            <span className="text-text-muted">Paused</span>
           )}
         </div>
-        <div className="text-xs text-slate-500">{row.sent} msgs lifetime</div>
+        <div className="text-xs text-text-muted">{row.sent} msgs lifetime</div>
       </div>
     );
   }
@@ -367,52 +468,78 @@ function StageAgentCell({ stageId, row }: { stageId: string; row: AgentRow }) {
     const replyPct = (row.replyRate * 100).toFixed(1);
     return (
       <div>
-        <div className="text-sm font-semibold text-slate-800">{replyPct}%</div>
-        <div className="text-xs text-slate-500">reply rate</div>
+        <div className="text-sm font-semibold text-text-primary">{replyPct}%</div>
+        <div className="text-xs text-text-muted">reply rate</div>
       </div>
     );
   }
-  return <span className="text-slate-300">—</span>;
+  return <span className="text-text-muted">—</span>;
 }
 
 function MetricBar({ label, value }: { label: string; value: number }) {
   const pct = Math.min(100, Math.max(0, value * 100));
   return (
     <div className="mb-1">
-      <div className="flex justify-between text-[10px] text-slate-500 mb-0.5">
+      <div className="flex justify-between text-[10px] text-text-muted mb-0.5">
         <span>{label}</span>
         <span>{pct.toFixed(1)}%</span>
       </div>
-      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
         <div className="h-full bg-brand-500 rounded-full" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
 }
 
-function MiniStat({
-  icon: Icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: ComponentType<{ size?: number }>;
-  label: string;
-  value: string | number;
-  hint: string;
-}) {
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div className="card p-4 flex items-center gap-4">
-      <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center">
-        <Icon size={18} />
-      </div>
-      <div className="min-w-0">
-        <div className="text-xs uppercase tracking-wide text-slate-500 font-medium">{label}</div>
-        <div className="text-xl font-semibold truncate">{value}</div>
-        <div className="text-xs text-slate-500 truncate">{hint}</div>
+    <div className="flex items-end justify-between mb-3">
+      <div>
+        <h2 className="text-sm font-semibold tracking-wide uppercase text-text-muted">
+          {title}
+        </h2>
+        {subtitle && <p className="text-xs text-text-muted">{subtitle}</p>}
       </div>
     </div>
   );
+}
+
+// Sparklines need a history series. We don't have one from the API yet, so we
+// synthesise a smooth 12-point curve that lands on the current value just for
+// visual shape. When a real time-series endpoint exists, drop this helper.
+function fauxSeries(end: number): number[] {
+  const len = 12;
+  const target = Math.max(0, Number(end) || 0);
+  if (target === 0) return Array(len).fill(0);
+  const start = target * 0.45;
+  return Array.from({ length: len }, (_, i) => {
+    const t = i / (len - 1);
+    const eased = start + (target - start) * Math.pow(t, 1.6);
+    const jitter = Math.sin(i * 1.7) * target * 0.05;
+    return Math.max(0, Math.round(eased + jitter));
+  });
+}
+
+function formatReplyRate(sent?: number, replied?: number): string {
+  if (!sent || sent === 0) return 'No sends yet';
+  const pct = ((replied ?? 0) / sent) * 100;
+  return `${pct.toFixed(1)}% reply rate`;
+}
+
+function replyRateTone(
+  sent?: number,
+  replied?: number,
+): 'positive' | 'negative' | 'neutral' {
+  if (!sent || sent === 0) return 'neutral';
+  const pct = ((replied ?? 0) / sent) * 100;
+  if (pct >= 5) return 'positive';
+  if (pct <= 1) return 'negative';
+  return 'neutral';
+}
+
+function formatWinRate(total?: number, won?: number): string {
+  if (!total || total === 0) return '—';
+  return `${(((won ?? 0) / total) * 100).toFixed(1)}%`;
 }
 
 function StageDot({ status }: { status: StageRow['status'] }) {
@@ -427,7 +554,7 @@ function StageDot({ status }: { status: StageRow['status'] }) {
 
 function StagePill({ status }: { status: StageRow['status'] }) {
   const styles: Record<StageRow['status'], string> = {
-    locked: 'bg-slate-100 text-slate-500',
+    locked: 'bg-surface-muted text-text-muted',
     in_progress: 'bg-amber-100 text-amber-700',
     approved: 'bg-emerald-100 text-emerald-700',
   };
@@ -490,7 +617,7 @@ function AnomalyBanner({ anomaly, onDismiss }: { anomaly: Anomaly; onDismiss: ()
       </div>
       <button
         onClick={onDismiss}
-        className="text-xs text-slate-500 hover:text-slate-800 p-1"
+        className="text-xs text-text-muted hover:text-text-primary p-1"
         aria-label="Dismiss"
       >
         ×

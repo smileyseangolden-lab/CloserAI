@@ -48,14 +48,14 @@ export function CrmCallbackPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="card p-8 max-w-md w-full text-center">
-        <div className="text-lg font-semibold text-slate-900 mb-2">
+        <div className="text-lg font-semibold text-text-primary mb-2">
           {status === 'working' && 'Connecting…'}
           {status === 'ok' && 'Connected'}
           {status === 'error' && 'Something went wrong'}
         </div>
         <div
           className={`text-sm ${
-            status === 'error' ? 'text-red-600' : 'text-slate-500'
+            status === 'error' ? 'text-red-600' : 'text-text-muted'
           }`}
         >
           {message}

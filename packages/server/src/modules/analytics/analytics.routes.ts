@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { and, eq, gte, isNull, sql, count } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, lte, sql, count } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '../../db/index.js';
 import {
   leads,
@@ -67,22 +68,32 @@ analyticsRouter.get('/dashboard', async (req, res, next) => {
   }
 });
 
+const funnelQuerySchema = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+});
+
 analyticsRouter.get('/funnel', async (req, res, next) => {
   try {
+    const q = funnelQuerySchema.parse(req.query);
     const orgId = req.auth!.organizationId;
     const stages = ['new', 'contacted', 'engaging', 'warm', 'hot', 'qualified', 'converted'];
+    const conditions = [eq(leads.organizationId, orgId), isNull(leads.deletedAt)];
+    if (q.from) conditions.push(gte(leads.createdAt, new Date(q.from)));
+    if (q.to) conditions.push(lte(leads.createdAt, new Date(q.to)));
+
     const [row] = await db
       .select({
-        new: sql<number>`count(*) filter (where ${leads.status} = 'new')`,
-        contacted: sql<number>`count(*) filter (where ${leads.status} = 'contacted')`,
-        engaging: sql<number>`count(*) filter (where ${leads.status} = 'engaging')`,
-        warm: sql<number>`count(*) filter (where ${leads.status} = 'warm')`,
-        hot: sql<number>`count(*) filter (where ${leads.status} = 'hot')`,
-        qualified: sql<number>`count(*) filter (where ${leads.status} = 'qualified')`,
-        converted: sql<number>`count(*) filter (where ${leads.status} = 'converted')`,
+        new: sql<number>`count(*) filter (where ${leads.status} = 'new')::int`,
+        contacted: sql<number>`count(*) filter (where ${leads.status} = 'contacted')::int`,
+        engaging: sql<number>`count(*) filter (where ${leads.status} = 'engaging')::int`,
+        warm: sql<number>`count(*) filter (where ${leads.status} = 'warm')::int`,
+        hot: sql<number>`count(*) filter (where ${leads.status} = 'hot')::int`,
+        qualified: sql<number>`count(*) filter (where ${leads.status} = 'qualified')::int`,
+        converted: sql<number>`count(*) filter (where ${leads.status} = 'converted')::int`,
       })
       .from(leads)
-      .where(and(eq(leads.organizationId, orgId), isNull(leads.deletedAt)));
+      .where(and(...conditions));
 
     res.json({ stages, data: row });
   } catch (err) {
@@ -238,26 +249,66 @@ analyticsRouter.get('/stages', async (req, res, next) => {
   }
 });
 
+const campaignsAnalyticsQuery = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  campaignId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 analyticsRouter.get('/campaigns', async (req, res, next) => {
   try {
+    const q = campaignsAnalyticsQuery.parse(req.query);
     const orgId = req.auth!.organizationId;
-    const rows = await db
+
+    const conditions = [eq(campaigns.organizationId, orgId), isNull(campaigns.deletedAt)];
+    if (q.campaignId) conditions.push(eq(campaigns.id, q.campaignId));
+
+    // Date bounds apply to campaign_leads.enteredAt so the funnel counts only
+    // leads that entered the campaign within the window.
+    const leadFilters = [];
+    if (q.from) leadFilters.push(gte(campaignLeads.enteredAt, new Date(q.from)));
+    if (q.to) leadFilters.push(lte(campaignLeads.enteredAt, new Date(q.to)));
+
+    const joinedLead =
+      leadFilters.length > 0 ? and(...leadFilters) : undefined;
+
+    const baseQuery = db
       .select({
         campaignId: campaigns.id,
         name: campaigns.name,
         status: campaigns.status,
         totalLeads: count(campaignLeads.id),
-        replied: sql<number>`count(*) filter (where ${campaignLeads.status} = 'replied')`,
-        warm: sql<number>`count(*) filter (where ${campaignLeads.status} = 'warm')`,
-        qualified: sql<number>`count(*) filter (where ${campaignLeads.status} = 'qualified')`,
-        converted: sql<number>`count(*) filter (where ${campaignLeads.status} = 'converted')`,
+        replied: sql<number>`count(*) filter (where ${campaignLeads.status} = 'replied')::int`,
+        warm: sql<number>`count(*) filter (where ${campaignLeads.status} = 'warm')::int`,
+        qualified: sql<number>`count(*) filter (where ${campaignLeads.status} = 'qualified')::int`,
+        converted: sql<number>`count(*) filter (where ${campaignLeads.status} = 'converted')::int`,
       })
       .from(campaigns)
-      .leftJoin(campaignLeads, eq(campaigns.id, campaignLeads.campaignId))
-      .where(and(eq(campaigns.organizationId, orgId), isNull(campaigns.deletedAt)))
+      .leftJoin(
+        campaignLeads,
+        joinedLead
+          ? and(eq(campaigns.id, campaignLeads.campaignId), joinedLead)
+          : eq(campaigns.id, campaignLeads.campaignId),
+      )
+      .where(and(...conditions))
       .groupBy(campaigns.id, campaigns.name, campaigns.status);
 
-    res.json(rows);
+    const [rows, totalRow] = await Promise.all([
+      baseQuery.orderBy(desc(campaigns.createdAt)).limit(q.limit).offset(q.offset),
+      db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(campaigns)
+        .where(and(...conditions)),
+    ]);
+
+    res.json({
+      data: rows,
+      total: totalRow[0]?.total ?? 0,
+      limit: q.limit,
+      offset: q.offset,
+    });
   } catch (err) {
     next(err);
   }

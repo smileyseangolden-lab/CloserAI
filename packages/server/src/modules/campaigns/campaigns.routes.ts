@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { and, eq, isNull, desc, asc } from 'drizzle-orm';
+import { and, eq, isNull, desc, asc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/index.js';
 import {
@@ -8,6 +8,7 @@ import {
   campaignLeads,
   leads,
   contacts,
+  messages,
 } from '../../db/schema.js';
 import { validateBody } from '../../middleware/validate.js';
 import { NotFoundError } from '../../utils/errors.js';
@@ -42,19 +43,31 @@ const campaignSchema = z.object({
   handoffUserId: z.string().uuid().optional(),
 });
 
+const listQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 campaignsRouter.get('/', async (req, res, next) => {
   try {
-    const rows = await db
-      .select()
-      .from(campaigns)
-      .where(
-        and(
-          eq(campaigns.organizationId, req.auth!.organizationId),
-          isNull(campaigns.deletedAt),
-        ),
-      )
-      .orderBy(desc(campaigns.createdAt));
-    res.json(rows);
+    const q = listQuerySchema.parse(req.query);
+    const where = and(
+      eq(campaigns.organizationId, req.auth!.organizationId),
+      isNull(campaigns.deletedAt),
+    );
+
+    const [rows, totalRow] = await Promise.all([
+      db
+        .select()
+        .from(campaigns)
+        .where(where)
+        .orderBy(desc(campaigns.createdAt))
+        .limit(q.limit)
+        .offset(q.offset),
+      db.select({ total: sql<number>`count(*)::int` }).from(campaigns).where(where),
+    ]);
+
+    res.json({ data: rows, total: totalRow[0]?.total ?? 0, limit: q.limit, offset: q.offset });
   } catch (err) {
     next(err);
   }
@@ -279,6 +292,107 @@ campaignsRouter.get('/:id/leads', async (req, res, next) => {
       .innerJoin(contacts, eq(campaignLeads.contactId, contacts.id))
       .where(eq(campaignLeads.campaignId, req.params.id!));
     res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Per-campaign analytics: top-line funnel (leads, warm, qualified, converted,
+ * replied) and per-channel message totals (sent / opened / replied / bounced).
+ *
+ * Per-step breakdown requires tying each message to a specific cadence step.
+ * We infer the step by joining on campaign_leads.current_step at the time of
+ * send — not perfect because the counter advances, but close enough for a
+ * rough funnel. If precision is needed later, stamp stepId on messages at
+ * enqueue time and join on that.
+ */
+campaignsRouter.get('/:id/analytics', async (req, res, next) => {
+  try {
+    const campaignId = req.params.id!;
+    const orgId = req.auth!.organizationId;
+
+    const [existing] = await db
+      .select()
+      .from(campaigns)
+      .where(
+        and(
+          eq(campaigns.id, campaignId),
+          eq(campaigns.organizationId, orgId),
+          isNull(campaigns.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!existing) throw new NotFoundError('Campaign');
+
+    const [funnelRow] = await db
+      .select({
+        totalLeads: sql<number>`count(*)::int`,
+        replied: sql<number>`count(*) filter (where ${campaignLeads.status} = 'replied')::int`,
+        warm: sql<number>`count(*) filter (where ${campaignLeads.status} = 'warm')::int`,
+        qualified: sql<number>`count(*) filter (where ${campaignLeads.status} = 'qualified')::int`,
+        converted: sql<number>`count(*) filter (where ${campaignLeads.status} = 'converted')::int`,
+        unsubscribed: sql<number>`count(*) filter (where ${campaignLeads.status} = 'unsubscribed')::int`,
+      })
+      .from(campaignLeads)
+      .where(eq(campaignLeads.campaignId, campaignId));
+
+    const steps = await db
+      .select()
+      .from(cadenceSteps)
+      .where(eq(cadenceSteps.campaignId, campaignId))
+      .orderBy(asc(cadenceSteps.stepNumber));
+
+    // Per-channel totals from messages that belong to any campaign_lead on
+    // this campaign.
+    const byChannel = await db
+      .select({
+        channel: messages.channel,
+        sent: sql<number>`count(*) filter (where ${messages.direction} = 'outbound')::int`,
+        opened: sql<number>`count(*) filter (where ${messages.openedAt} is not null)::int`,
+        replied: sql<number>`count(*) filter (where ${messages.repliedAt} is not null)::int`,
+        bounced: sql<number>`count(*) filter (where ${messages.bouncedAt} is not null)::int`,
+      })
+      .from(messages)
+      .innerJoin(campaignLeads, eq(messages.campaignLeadId, campaignLeads.id))
+      .where(
+        and(
+          eq(campaignLeads.campaignId, campaignId),
+          eq(messages.organizationId, orgId),
+        ),
+      )
+      .groupBy(messages.channel);
+
+    const totals = byChannel.reduce(
+      (acc, r) => ({
+        sent: acc.sent + (r.sent ?? 0),
+        opened: acc.opened + (r.opened ?? 0),
+        replied: acc.replied + (r.replied ?? 0),
+        bounced: acc.bounced + (r.bounced ?? 0),
+      }),
+      { sent: 0, opened: 0, replied: 0, bounced: 0 },
+    );
+
+    res.json({
+      funnel: {
+        totalLeads: funnelRow?.totalLeads ?? 0,
+        replied: funnelRow?.replied ?? 0,
+        warm: funnelRow?.warm ?? 0,
+        qualified: funnelRow?.qualified ?? 0,
+        converted: funnelRow?.converted ?? 0,
+        unsubscribed: funnelRow?.unsubscribed ?? 0,
+      },
+      messages: {
+        totals,
+        byChannel,
+      },
+      steps: steps.map((s) => ({
+        id: s.id,
+        stepNumber: s.stepNumber,
+        channel: s.channel,
+        isActive: s.isActive,
+      })),
+    });
   } catch (err) {
     next(err);
   }

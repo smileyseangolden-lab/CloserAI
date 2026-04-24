@@ -104,7 +104,7 @@ export function DashboardBuilderPage() {
   if (!id) return <Navigate to="/stages/analytics" replace />;
   if (dashboard === null) {
     return (
-      <div className="p-8 text-slate-500">
+      <div className="p-8 text-text-muted">
         Loading, or dashboard not found.{' '}
         <Link to="/stages/analytics" className="text-brand-600">
           Back to analytics
@@ -172,14 +172,14 @@ export function DashboardBuilderPage() {
         <div>
           <Link
             to="/stages/analytics"
-            className="text-xs text-slate-500 hover:text-slate-800 inline-flex items-center gap-1 mb-1"
+            className="text-xs text-text-muted hover:text-text-primary inline-flex items-center gap-1 mb-1"
           >
             <ArrowLeft size={12} /> Back to Analytics
           </Link>
           <div className="flex items-center gap-2">
             <BarChart3 size={20} className="text-brand-600" />
             <input
-              className="text-2xl font-semibold bg-transparent border-none focus:outline-none focus:bg-slate-50 rounded px-1 -ml-1"
+              className="text-2xl font-semibold bg-transparent border-none focus:outline-none focus:bg-surface-muted rounded px-1 -ml-1"
               value={dashboard.name}
               onChange={(e) => {
                 setDashboard({ ...dashboard, name: e.target.value });
@@ -193,7 +193,7 @@ export function DashboardBuilderPage() {
             />
           </div>
           {dashboard.description && (
-            <div className="text-sm text-slate-500 mt-1">{dashboard.description}</div>
+            <div className="text-sm text-text-muted mt-1">{dashboard.description}</div>
           )}
         </div>
         <button className="btn-primary" onClick={save} disabled={saving || !dirty}>
@@ -202,13 +202,13 @@ export function DashboardBuilderPage() {
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6">
-        <span className="text-xs text-slate-500 flex items-center gap-1 mr-1">
+        <span className="text-xs text-text-muted flex items-center gap-1 mr-1">
           <Plus size={12} /> Add:
         </span>
         {WIDGET_OPTIONS.map((o) => (
           <button
             key={o.type}
-            className="text-xs px-2.5 py-1 rounded-full border border-slate-200 hover:bg-slate-50 text-slate-700 flex items-center gap-1"
+            className="text-xs px-2.5 py-1 rounded-full border border-border-default hover:bg-surface-muted text-text-primary flex items-center gap-1"
             onClick={() => addWidget(o.type)}
           >
             {o.icon} {o.label}
@@ -217,7 +217,7 @@ export function DashboardBuilderPage() {
       </div>
 
       {dashboard.layout.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-200 p-12 text-center text-slate-500">
+        <div className="rounded-xl border border-dashed border-border-default p-12 text-center text-text-muted">
           Empty dashboard. Add a widget above.
         </div>
       ) : (
@@ -280,25 +280,25 @@ function SortableWidget({
           <button
             {...attributes}
             {...listeners}
-            className="text-slate-300 hover:text-slate-600 cursor-grab active:cursor-grabbing mt-0.5"
+            className="text-text-muted hover:text-text-secondary cursor-grab active:cursor-grabbing mt-0.5"
             aria-label="Drag"
           >
             <GripVertical size={14} />
           </button>
           <div className="min-w-0">
             <input
-              className="text-sm font-semibold bg-transparent border-none focus:outline-none focus:bg-slate-50 rounded px-1 -ml-1 w-full"
+              className="text-sm font-semibold bg-transparent border-none focus:outline-none focus:bg-surface-muted rounded px-1 -ml-1 w-full"
               value={widget.title ?? ''}
               onChange={(e) => onUpdate({ title: e.target.value })}
             />
-            <div className="text-[10px] text-slate-400 uppercase tracking-wide">
+            <div className="text-[10px] text-text-muted uppercase tracking-wide">
               {widget.type.replace(/_/g, ' ')}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-1">
           <select
-            className="text-xs bg-transparent border border-slate-200 rounded px-1.5 py-0.5"
+            className="text-xs bg-transparent border border-border-default rounded px-1.5 py-0.5"
             value={widget.size ?? 'medium'}
             onChange={(e) => onUpdate({ size: e.target.value as Widget['size'] })}
           >
@@ -308,7 +308,7 @@ function SortableWidget({
           </select>
           <button
             onClick={onRemove}
-            className="text-slate-300 hover:text-red-500 p-1"
+            className="text-text-muted hover:text-red-500 p-1"
             aria-label="Remove"
           >
             <Trash2 size={14} />
@@ -357,8 +357,8 @@ function WidgetBody({
   data: unknown;
   loading: boolean;
 }) {
-  if (loading && !data) return <div className="text-xs text-slate-400">Loading…</div>;
-  if (!data) return <div className="text-xs text-slate-400">No data yet.</div>;
+  if (loading && !data) return <div className="text-xs text-text-muted">Loading…</div>;
+  if (!data) return <div className="text-xs text-text-muted">No data yet.</div>;
   const d = data as Record<string, unknown>;
   if (d.error) return <div className="text-xs text-red-600">{String(d.error)}</div>;
 
@@ -369,8 +369,8 @@ function WidgetBody({
     const formatted = isCurrency ? `$${value.toLocaleString()}` : value.toLocaleString();
     return (
       <div>
-        <div className="text-3xl font-semibold text-slate-900">{formatted}</div>
-        <div className="text-xs text-slate-500 mt-1">{(d.label as string) ?? ''}</div>
+        <div className="text-3xl font-semibold text-text-primary">{formatted}</div>
+        <div className="text-xs text-text-muted mt-1">{(d.label as string) ?? ''}</div>
       </div>
     );
   }
@@ -379,14 +379,14 @@ function WidgetBody({
     const rows = (d.rows as Record<string, unknown>[] | undefined) ?? [];
     if (rows.length === 0)
       return (
-        <div className="text-xs text-slate-400">{(d.note as string) ?? 'No rows.'}</div>
+        <div className="text-xs text-text-muted">{(d.note as string) ?? 'No rows.'}</div>
       );
     const cols = Object.keys(rows[0] ?? {});
     return (
       <div className="overflow-x-auto max-h-56">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-slate-500 border-b border-slate-200">
+            <tr className="text-text-muted border-b border-border-default">
               {cols.map((c) => (
                 <th key={c} className="text-left py-1 pr-3 font-medium">
                   {c}
@@ -396,9 +396,9 @@ function WidgetBody({
           </thead>
           <tbody>
             {rows.slice(0, 20).map((r, i) => (
-              <tr key={i} className="border-b border-slate-100">
+              <tr key={i} className="border-b border-border-subtle">
                 {cols.map((c) => (
-                  <td key={c} className="py-1 pr-3 text-slate-700">
+                  <td key={c} className="py-1 pr-3 text-text-primary">
                     {formatCell(r[c])}
                   </td>
                 ))}
@@ -416,13 +416,13 @@ function WidgetBody({
     const inProg = stages.filter((s) => s.status === 'in_progress').length;
     return (
       <div>
-        <div className="text-2xl font-semibold text-slate-900">
+        <div className="text-2xl font-semibold text-text-primary">
           {approved} / 11 approved
         </div>
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-text-muted">
           {inProg} in progress · {11 - approved - inProg} not started
         </div>
-        <div className="flex gap-0.5 mt-3 overflow-hidden rounded-full h-1.5 bg-slate-100">
+        <div className="flex gap-0.5 mt-3 overflow-hidden rounded-full h-1.5 bg-surface-muted">
           {Array.from({ length: 11 }).map((_, i) => {
             const s = stages[i];
             return (
@@ -433,7 +433,7 @@ function WidgetBody({
                     ? 'bg-emerald-500'
                     : s?.status === 'in_progress'
                       ? 'bg-amber-400'
-                      : 'bg-slate-200'
+                      : 'bg-surface-muted'
                 }`}
               />
             );
@@ -448,11 +448,11 @@ function WidgetBody({
       (d.items as Array<{ agentName: string; sent: number; replyRate: number }> | undefined) ?? [];
     return (
       <ul className="space-y-1 text-xs">
-        {items.length === 0 && <li className="text-slate-400">No qualifying agents.</li>}
+        {items.length === 0 && <li className="text-text-muted">No qualifying agents.</li>}
         {items.slice(0, 6).map((a) => (
           <li key={a.agentName} className="flex items-center justify-between">
             <span className="truncate">{a.agentName}</span>
-            <span className="font-mono text-slate-600">
+            <span className="font-mono text-text-secondary">
               {(a.replyRate * 100).toFixed(1)}% · {a.sent} sent
             </span>
           </li>
@@ -461,7 +461,7 @@ function WidgetBody({
     );
   }
 
-  return <pre className="text-[10px] bg-slate-50 p-2 rounded">{JSON.stringify(d, null, 2)}</pre>;
+  return <pre className="text-[10px] bg-surface-muted p-2 rounded">{JSON.stringify(d, null, 2)}</pre>;
 }
 
 function formatCell(v: unknown): string {

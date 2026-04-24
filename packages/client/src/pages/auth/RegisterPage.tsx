@@ -1,114 +1,170 @@
-import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useAuthStore } from '../../stores/auth';
+import {
+  Button,
+  Field,
+  FieldError,
+  FieldLabel,
+  FormError,
+  FormRow,
+  Input,
+} from '../../components/ui';
+
+const schema = z.object({
+  organizationName: z.string().min(1, 'Company name is required'),
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  email: z.string().min(1, 'Email is required').email('Enter a valid work email'),
+  password: z
+    .string()
+    .min(8, 'At least 8 characters')
+    .max(128, 'Too long'),
+  website: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (v) => !v || /^https?:\/\//i.test(v),
+      'Website should start with http:// or https://',
+    ),
+});
+
+type FormValues = z.infer<typeof schema>;
 
 export function RegisterPage() {
-  const [form, setForm] = useState({
-    organizationName: '',
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    website: '',
-  });
-  const register = useAuthStore((s) => s.register);
-  const error = useAuthStore((s) => s.error);
-  const loading = useAuthStore((s) => s.loading);
+  const registerUser = useAuthStore((s) => s.register);
+  const storeError = useAuthStore((s) => s.error);
   const navigate = useNavigate();
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting, isValid },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    mode: 'onChange',
+    defaultValues: {
+      organizationName: '',
+      firstName: '',
+      lastName: '',
+      email: '',
+      password: '',
+      website: '',
+    },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
     try {
-      await register({
-        ...form,
-        website: form.website || undefined,
+      await registerUser({
+        ...values,
+        website: values.website?.trim() || undefined,
       });
       navigate('/onboarding');
     } catch {
-      /* shown via store */
+      /* shown via store error */
     }
-  }
+  });
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-app">
       <div className="w-full max-w-md card p-8">
         <div className="flex items-center gap-2 mb-6">
           <div className="w-10 h-10 rounded-xl bg-brand-500 text-white flex items-center justify-center font-bold">
             C
           </div>
-          <span className="text-xl font-semibold tracking-tight">CloserAI</span>
+          <span className="text-xl font-semibold tracking-tight text-text-primary">
+            CloserAI
+          </span>
         </div>
-        <h1 className="text-2xl font-semibold mb-2">Start your free trial</h1>
-        <p className="text-sm text-slate-500 mb-6">14 days, no credit card required.</p>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <label className="label">Company name</label>
-            <input
-              className="input"
-              value={form.organizationName}
-              onChange={(e) => setForm({ ...form, organizationName: e.target.value })}
-              required
+        <h1 className="text-2xl font-semibold mb-2 text-text-primary">
+          Start your free trial
+        </h1>
+        <p className="text-sm text-text-muted mb-6">14 days, no credit card required.</p>
+        <form onSubmit={onSubmit} className="space-y-4" noValidate>
+          <Field>
+            <FieldLabel htmlFor="organizationName">Company name</FieldLabel>
+            <Input
+              id="organizationName"
+              aria-invalid={errors.organizationName ? 'true' : 'false'}
+              {...register('organizationName')}
             />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">First name</label>
-              <input
-                className="input"
-                value={form.firstName}
-                onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                required
+            <FieldError>{errors.organizationName?.message}</FieldError>
+          </Field>
+          <FormRow>
+            <Field>
+              <FieldLabel htmlFor="firstName">First name</FieldLabel>
+              <Input
+                id="firstName"
+                autoComplete="given-name"
+                aria-invalid={errors.firstName ? 'true' : 'false'}
+                {...register('firstName')}
               />
-            </div>
-            <div>
-              <label className="label">Last name</label>
-              <input
-                className="input"
-                value={form.lastName}
-                onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                required
+              <FieldError>{errors.firstName?.message}</FieldError>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="lastName">Last name</FieldLabel>
+              <Input
+                id="lastName"
+                autoComplete="family-name"
+                aria-invalid={errors.lastName ? 'true' : 'false'}
+                {...register('lastName')}
               />
-            </div>
-          </div>
-          <div>
-            <label className="label">Work email</label>
-            <input
-              className="input"
+              <FieldError>{errors.lastName?.message}</FieldError>
+            </Field>
+          </FormRow>
+          <Field>
+            <FieldLabel htmlFor="email">Work email</FieldLabel>
+            <Input
+              id="email"
               type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              required
+              autoComplete="email"
+              aria-invalid={errors.email ? 'true' : 'false'}
+              {...register('email')}
             />
-          </div>
-          <div>
-            <label className="label">Password</label>
-            <input
-              className="input"
+            <FieldError>{errors.email?.message}</FieldError>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="password">Password</FieldLabel>
+            <Input
+              id="password"
               type="password"
-              minLength={8}
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              required
+              autoComplete="new-password"
+              aria-invalid={errors.password ? 'true' : 'false'}
+              {...register('password')}
             />
-          </div>
-          <div>
-            <label className="label">Company website (optional)</label>
-            <input
-              className="input"
+            <FieldError>{errors.password?.message}</FieldError>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="website">Company website (optional)</FieldLabel>
+            <Input
+              id="website"
               type="url"
               placeholder="https://..."
-              value={form.website}
-              onChange={(e) => setForm({ ...form, website: e.target.value })}
+              aria-invalid={errors.website ? 'true' : 'false'}
+              {...register('website')}
             />
-          </div>
-          {error && <div className="text-sm text-red-600">{error}</div>}
-          <button type="submit" className="btn-primary w-full justify-center" disabled={loading}>
-            {loading ? 'Creating workspace...' : 'Create workspace'}
-          </button>
+            <FieldError>{errors.website?.message}</FieldError>
+          </Field>
+          <FormError>{storeError}</FormError>
+          <Button
+            type="submit"
+            className="w-full justify-center"
+            size="lg"
+            loading={isSubmitting}
+            disabled={!isValid || isSubmitting}
+          >
+            Create workspace
+          </Button>
         </form>
-        <p className="text-sm text-slate-500 mt-6 text-center">
+        <p className="text-sm text-text-muted mt-6 text-center">
           Already have an account?{' '}
-          <Link to="/login" className="text-brand-600 font-medium">
+          <Link
+            to="/login"
+            className="text-brand-600 dark:text-brand-300 font-medium hover:underline"
+          >
             Sign in
           </Link>
         </p>

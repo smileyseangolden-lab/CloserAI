@@ -73,20 +73,20 @@ export function ValuePropStage() {
             {variants.map((v) => (
               <div
                 key={v.id}
-                className="bg-white rounded-lg border border-slate-200 p-3 space-y-1"
+                className="bg-surface rounded-lg border border-border-default p-3 space-y-1"
               >
                 <div className="flex items-center justify-between">
                   <span className="badge bg-brand-50 text-brand-700 capitalize">
                     {v.variant.replace(/_/g, ' ')}
                   </span>
                   {v.targetPersona && (
-                    <span className="text-xs text-slate-500">{v.targetPersona}</span>
+                    <span className="text-xs text-text-muted">{v.targetPersona}</span>
                   )}
                 </div>
-                <div className="font-medium text-slate-900">{v.headline}</div>
-                <div className="text-sm text-slate-700 line-clamp-3">{v.body}</div>
+                <div className="font-medium text-text-primary">{v.headline}</div>
+                <div className="text-sm text-text-primary line-clamp-3">{v.body}</div>
                 {v.proofPoints && v.proofPoints.length > 0 && (
-                  <ul className="text-xs text-slate-600 list-disc pl-4">
+                  <ul className="text-xs text-text-secondary list-disc pl-4">
                     {v.proofPoints.slice(0, 3).map((p, i) => (
                       <li key={i}>{p}</li>
                     ))}
@@ -104,24 +104,24 @@ export function ValuePropStage() {
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {pricing.map((p) => (
-                <div key={p.id} className="bg-white rounded-lg border border-slate-200 p-3">
-                  <div className="font-medium text-slate-900">{p.name}</div>
+                <div key={p.id} className="bg-surface rounded-lg border border-border-default p-3">
+                  <div className="font-medium text-text-primary">{p.name}</div>
                   {p.priceMonthly && (
-                    <div className="text-lg font-semibold text-slate-900">
+                    <div className="text-lg font-semibold text-text-primary">
                       {p.currency} {Number(p.priceMonthly).toLocaleString()}
-                      <span className="text-xs font-normal text-slate-500">/mo</span>
+                      <span className="text-xs font-normal text-text-muted">/mo</span>
                     </div>
                   )}
                   {p.targetSegment && (
-                    <div className="text-xs text-slate-500 mb-1">{p.targetSegment}</div>
+                    <div className="text-xs text-text-muted mb-1">{p.targetSegment}</div>
                   )}
                   {p.features && p.features.length > 0 && (
-                    <ul className="text-xs text-slate-700 list-disc pl-4">
+                    <ul className="text-xs text-text-primary list-disc pl-4">
                       {p.features.slice(0, 4).map((f, i) => (
                         <li key={i}>{f}</li>
                       ))}
                       {p.features.length > 4 && (
-                        <li className="text-slate-400">+{p.features.length - 4} more</li>
+                        <li className="text-text-muted">+{p.features.length - 4} more</li>
                       )}
                     </ul>
                   )}
@@ -139,7 +139,7 @@ export function ValuePropStage() {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="text-slate-500 border-b border-slate-200">
+                  <tr className="text-text-muted border-b border-border-default">
                     <th className="text-left py-1 pr-3">Competitor</th>
                     <th className="text-left py-1 pr-3">G2</th>
                     <th className="text-left py-1 pr-3">Where we win</th>
@@ -148,9 +148,9 @@ export function ValuePropStage() {
                 </thead>
                 <tbody>
                   {competitors.map((c) => (
-                    <tr key={c.id} className="border-b border-slate-100 align-top">
+                    <tr key={c.id} className="border-b border-border-subtle align-top">
                       <td className="py-2 pr-3">
-                        <div className="font-medium text-slate-900">{c.competitor}</div>
+                        <div className="font-medium text-text-primary">{c.competitor}</div>
                         {c.competitorUrl && (
                           <a
                             href={c.competitorUrl}
@@ -165,10 +165,10 @@ export function ValuePropStage() {
                       <td className="py-2 pr-3">
                         {c.g2Rating ? `${c.g2Rating.toFixed(1)}★` : '—'}
                       </td>
-                      <td className="py-2 pr-3 text-slate-700">
+                      <td className="py-2 pr-3 text-text-primary">
                         {(c.ourStrengths ?? []).slice(0, 3).join(' · ') || '—'}
                       </td>
-                      <td className="py-2 text-slate-700">
+                      <td className="py-2 text-text-primary">
                         {(c.theirStrengths ?? []).slice(0, 3).join(' · ') || '—'}
                       </td>
                     </tr>
@@ -197,11 +197,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 p-4">
-      <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+    <div className="rounded-xl border border-border-default p-4">
+      <div className="flex items-center gap-2 text-xs font-medium text-text-muted uppercase tracking-wide mb-3">
         {icon} {title}
       </div>
-      {empty ? <div className="text-xs text-slate-400">{emptyHint}</div> : children}
+      {empty ? <div className="text-xs text-text-muted">{emptyHint}</div> : children}
     </div>
   );
 }

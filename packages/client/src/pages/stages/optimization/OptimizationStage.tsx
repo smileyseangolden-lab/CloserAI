@@ -4,6 +4,18 @@ import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
 import { ManagersPanel } from './ManagersPanel';
+import {
+  Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  PromptDialog,
+  toast,
+} from '../../../components/ui';
 
 interface ProposalRow {
   id: string;
@@ -46,6 +58,10 @@ export function OptimizationStage() {
   const [runBusy, setRunBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [tab, setTab] = useState<'proposals' | 'experiments' | 'managers'>('proposals');
+  const [dismissTarget, setDismissTarget] = useState<ProposalRow | null>(null);
+  const [dismissBusy, setDismissBusy] = useState(false);
+  const [stopExpTarget, setStopExpTarget] = useState<ExperimentRow | null>(null);
+  const [stopExpBusy, setStopExpBusy] = useState(false);
 
   useEffect(() => {
     void Promise.all([
@@ -65,45 +81,86 @@ export function OptimizationStage() {
     if (!scheduler) return;
     const next = !scheduler.enabled;
     setScheduler({ ...scheduler, enabled: next });
-    await api.patch('/optimization/scheduler', { enabled: next });
+    try {
+      await api.patch('/optimization/scheduler', { enabled: next });
+      toast.success(next ? 'Continuous optimization on' : 'Continuous optimization off');
+    } catch (err) {
+      setScheduler({ ...scheduler, enabled: !next });
+      toast.error(err instanceof Error ? err.message : 'Could not update scheduler');
+    }
   }
 
   async function runNow() {
     setRunBusy(true);
     try {
       await api.post('/optimization/scheduler/run-now', {});
-      // Give the worker ~20s to produce proposals, then refetch.
+      toast.success('Optimizer triggered — proposals in ~20s');
       setTimeout(() => setRefreshKey((k) => k + 1), 20_000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not trigger optimizer');
     } finally {
       setRunBusy(false);
     }
   }
 
   async function approve(id: string) {
-    await api.post(`/optimization/proposals/${id}/approve`, {});
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.post(`/optimization/proposals/${id}/approve`, {});
+      toast.success('Proposal approved');
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Approve failed');
+    }
   }
-  async function dismiss(id: string) {
-    const reason = prompt('Why dismiss?') ?? '';
-    await api.post(`/optimization/proposals/${id}/dismiss`, { reason });
-    setRefreshKey((k) => k + 1);
+  async function submitDismiss(reason: string) {
+    if (!dismissTarget) return;
+    setDismissBusy(true);
+    try {
+      await api.post(`/optimization/proposals/${dismissTarget.id}/dismiss`, {
+        reason: reason.trim(),
+      });
+      toast.success('Proposal dismissed');
+      setDismissTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Dismiss failed');
+    } finally {
+      setDismissBusy(false);
+    }
   }
   async function startExp(id: string) {
-    await api.post(`/optimization/experiments/${id}/start`, {});
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.post(`/optimization/experiments/${id}/start`, {});
+      toast.success('Experiment started');
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not start experiment');
+    }
   }
-  async function stopExp(id: string) {
-    const w = prompt('Winning variant? Enter A, B, or blank.') ?? '';
-    await api.post(`/optimization/experiments/${id}/stop`, {
-      winningVariant: w === 'A' || w === 'B' ? w : undefined,
-    });
-    setRefreshKey((k) => k + 1);
+  async function submitStopExp(winner: 'A' | 'B' | null) {
+    if (!stopExpTarget) return;
+    setStopExpBusy(true);
+    try {
+      await api.post(`/optimization/experiments/${stopExpTarget.id}/stop`, {
+        winningVariant: winner ?? undefined,
+      });
+      toast.success(
+        winner ? `Experiment stopped — variant ${winner} won` : 'Experiment stopped',
+      );
+      setStopExpTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Stop failed');
+    } finally {
+      setStopExpBusy(false);
+    }
   }
 
   const pending = proposals.filter((p) => p.status === 'pending');
   const resolved = proposals.filter((p) => p.status !== 'pending');
 
   return (
+    <>
     <StepAssistant
       key={`opt-${refreshKey}`}
       stage={stage}
@@ -111,19 +168,19 @@ export function OptimizationStage() {
       sidePanel={
         <div className="space-y-4">
           {scheduler && (
-            <div className="rounded-xl border border-slate-200 p-4">
+            <div className="rounded-xl border border-border-default p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs font-medium text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                  <div className="text-xs font-medium text-text-muted uppercase tracking-wide flex items-center gap-1">
                     <Power size={12} /> Continuous optimization
                   </div>
-                  <div className="text-sm text-slate-700 mt-1">
+                  <div className="text-sm text-text-primary mt-1">
                     {scheduler.enabled
                       ? 'Running every ~6 hours — proposals drop here automatically.'
                       : 'Paused — enable to let the scheduler propose changes for you.'}
                   </div>
                   {scheduler.lastProposalAt && (
-                    <div className="text-xs text-slate-500 mt-1">
+                    <div className="text-xs text-text-muted mt-1">
                       last proposal {new Date(scheduler.lastProposalAt).toLocaleString()}
                     </div>
                   )}
@@ -149,7 +206,7 @@ export function OptimizationStage() {
             </div>
           )}
 
-          <div className="flex gap-1 border-b border-slate-200 -mb-px">
+          <div className="flex gap-1 border-b border-border-default -mb-px">
             <TabBtn active={tab === 'proposals'} onClick={() => setTab('proposals')}>
               <Wand2 size={12} /> Proposals
               {pending.length > 0 && (
@@ -161,7 +218,7 @@ export function OptimizationStage() {
             <TabBtn active={tab === 'experiments'} onClick={() => setTab('experiments')}>
               <Beaker size={12} /> Experiments
               {experiments.length > 0 && (
-                <span className="ml-1 text-[10px] text-slate-500">{experiments.length}</span>
+                <span className="ml-1 text-[10px] text-text-muted">{experiments.length}</span>
               )}
             </TabBtn>
             <TabBtn active={tab === 'managers'} onClick={() => setTab('managers')}>
@@ -174,34 +231,39 @@ export function OptimizationStage() {
           ) : tab === 'proposals' ? (
             <div className="space-y-3">
               {pending.length === 0 && resolved.length === 0 && (
-                <div className="text-xs text-slate-400 px-1">
+                <div className="text-xs text-text-muted px-1">
                   Ask the assistant to analyse pipeline performance and propose changes. Approving
                   a proposal writes-back into Stage 3 (agents), Stage 4 (ICP), or Stage 6
                   (knowledge) automatically.
                 </div>
               )}
               {pending.map((p) => (
-                <ProposalCard key={p.id} p={p} onApprove={approve} onDismiss={dismiss} />
+                <ProposalCard
+                  key={p.id}
+                  p={p}
+                  onApprove={approve}
+                  onDismiss={(proposal) => setDismissTarget(proposal)}
+                />
               ))}
               {resolved.length > 0 && (
                 <details className="text-xs">
-                  <summary className="text-slate-500 cursor-pointer">
+                  <summary className="text-text-muted cursor-pointer">
                     {resolved.length} resolved proposals
                   </summary>
                   <div className="mt-2 space-y-2">
                     {resolved.map((p) => (
                       <div
                         key={p.id}
-                        className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+                        className="text-xs bg-surface-muted border border-border-default rounded-lg px-3 py-2"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-slate-700">{p.title}</span>
+                          <span className="font-medium text-text-primary">{p.title}</span>
                           <span
                             className={
                               p.status === 'applied'
                                 ? 'text-emerald-600'
                                 : p.status === 'dismissed'
-                                  ? 'text-slate-400'
+                                  ? 'text-text-muted'
                                   : 'text-amber-600'
                             }
                           >
@@ -217,24 +279,24 @@ export function OptimizationStage() {
           ) : (
             <div className="space-y-2">
               {experiments.length === 0 && (
-                <div className="text-xs text-slate-400 px-1">
+                <div className="text-xs text-text-muted px-1">
                   No experiments yet. Ask the assistant to design an A/B test.
                 </div>
               )}
               {experiments.map((e) => (
                 <div
                   key={e.id}
-                  className="bg-white border border-slate-200 rounded-lg p-3 text-sm"
+                  className="bg-surface border border-border-default rounded-lg p-3 text-sm"
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">
-                      <div className="font-medium text-slate-900 truncate">{e.name}</div>
-                      <div className="text-xs text-slate-500">
+                      <div className="font-medium text-text-primary truncate">{e.name}</div>
+                      <div className="text-xs text-text-muted">
                         Metric: <span className="font-mono">{e.metric}</span> · target n=
                         {e.targetSampleSize}
                       </div>
                       {e.hypothesis && (
-                        <div className="text-xs text-slate-600 mt-1 line-clamp-2">
+                        <div className="text-xs text-text-secondary mt-1 line-clamp-2">
                           {e.hypothesis}
                         </div>
                       )}
@@ -253,7 +315,7 @@ export function OptimizationStage() {
                       </button>
                     )}
                     {e.status === 'running' && (
-                      <button className="btn-secondary text-xs" onClick={() => stopExp(e.id)}>
+                      <button className="btn-secondary text-xs" onClick={() => setStopExpTarget(e)}>
                         <StopCircle size={12} /> Stop
                       </button>
                     )}
@@ -265,6 +327,111 @@ export function OptimizationStage() {
         </div>
       }
     />
+    <PromptDialog
+      open={dismissTarget !== null}
+      onOpenChange={(open) => {
+        if (!open) setDismissTarget(null);
+      }}
+      title="Dismiss this proposal?"
+      description={
+        dismissTarget ? (
+          <>
+            We'll hide <strong>{dismissTarget.title}</strong> and log why. The assistant won't
+            re-suggest it unless something changes.
+          </>
+        ) : null
+      }
+      label="Reason (optional)"
+      placeholder="e.g. already tried, not aligned with current ICP…"
+      confirmLabel="Dismiss"
+      loading={dismissBusy}
+      onConfirm={submitDismiss}
+    />
+    <StopExperimentDialog
+      experiment={stopExpTarget}
+      loading={stopExpBusy}
+      onClose={() => setStopExpTarget(null)}
+      onConfirm={submitStopExp}
+    />
+    </>
+  );
+}
+
+function StopExperimentDialog({
+  experiment,
+  loading,
+  onClose,
+  onConfirm,
+}: {
+  experiment: ExperimentRow | null;
+  loading: boolean;
+  onClose: () => void;
+  onConfirm: (winner: 'A' | 'B' | null) => void;
+}) {
+  const [winner, setWinner] = useState<'A' | 'B' | ''>('');
+  useEffect(() => {
+    setWinner('');
+  }, [experiment?.id]);
+  return (
+    <Dialog
+      open={experiment !== null}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Stop experiment</DialogTitle>
+          <DialogDescription>
+            {experiment ? (
+              <>
+                Declare a winner for <strong>{experiment.name}</strong>, or stop without one.
+              </>
+            ) : null}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex gap-2">
+            {(['A', 'B'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setWinner(v)}
+                className={`flex-1 rounded-lg border px-4 py-3 text-sm font-medium transition ${
+                  winner === v
+                    ? 'border-brand-400 bg-brand-50 text-brand-700'
+                    : 'border-border-default hover:bg-surface-muted'
+                }`}
+              >
+                Variant {v} won
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setWinner('')}
+              className={`flex-1 rounded-lg border px-4 py-3 text-sm font-medium transition ${
+                winner === ''
+                  ? 'border-slate-400 bg-surface-muted text-text-primary'
+                  : 'border-border-default hover:bg-surface-muted'
+              }`}
+            >
+              No winner
+            </button>
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => onConfirm(winner === '' ? null : winner)}
+            loading={loading}
+          >
+            Stop experiment
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -275,40 +442,40 @@ function ProposalCard({
 }: {
   p: ProposalRow;
   onApprove: (id: string) => Promise<void>;
-  onDismiss: (id: string) => Promise<void>;
+  onDismiss: (p: ProposalRow) => void;
 }) {
-  const [busy, setBusy] = useState<'approve' | 'dismiss' | null>(null);
+  const [busy, setBusy] = useState<'approve' | null>(null);
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-border-default bg-surface p-4">
       <div className="flex items-center gap-2 mb-1">
         <span className="badge bg-brand-50 text-brand-700 capitalize">
           {p.proposalType.replace(/_/g, ' ')}
         </span>
-        <span className="text-xs text-slate-500">→ {p.targetResourceType}</span>
+        <span className="text-xs text-text-muted">→ {p.targetResourceType}</span>
       </div>
-      <div className="font-semibold text-slate-900">{p.title}</div>
-      <div className="text-sm text-slate-700 mt-1">{p.description}</div>
+      <div className="font-semibold text-text-primary">{p.title}</div>
+      <div className="text-sm text-text-primary mt-1">{p.description}</div>
       {p.rationale && (
-        <div className="text-xs text-slate-600 italic mt-2">{p.rationale}</div>
+        <div className="text-xs text-text-secondary italic mt-2">{p.rationale}</div>
       )}
       {p.expectedImpact && (
         <div className="text-xs mt-1">
-          <span className="font-medium text-slate-700">Expected impact:</span>{' '}
-          <span className="text-slate-600">{p.expectedImpact}</span>
+          <span className="font-medium text-text-primary">Expected impact:</span>{' '}
+          <span className="text-text-secondary">{p.expectedImpact}</span>
         </div>
       )}
       {(p.beforeValue || p.afterValue) && (
         <details className="text-xs mt-2">
-          <summary className="text-slate-500 cursor-pointer">before / after</summary>
+          <summary className="text-text-muted cursor-pointer">before / after</summary>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
             <div>
-              <div className="text-[10px] text-slate-500 mb-1">BEFORE</div>
-              <pre className="bg-slate-50 rounded p-2 overflow-auto max-h-32">
+              <div className="text-[10px] text-text-muted mb-1">BEFORE</div>
+              <pre className="bg-surface-muted rounded p-2 overflow-auto max-h-32">
                 {JSON.stringify(p.beforeValue ?? null, null, 2)}
               </pre>
             </div>
             <div>
-              <div className="text-[10px] text-slate-500 mb-1">AFTER</div>
+              <div className="text-[10px] text-text-muted mb-1">AFTER</div>
               <pre className="bg-emerald-50 rounded p-2 overflow-auto max-h-32">
                 {JSON.stringify(p.afterValue ?? null, null, 2)}
               </pre>
@@ -334,14 +501,7 @@ function ProposalCard({
         <button
           className="btn-secondary"
           disabled={busy !== null}
-          onClick={async () => {
-            setBusy('dismiss');
-            try {
-              await onDismiss(p.id);
-            } finally {
-              setBusy(null);
-            }
-          }}
+          onClick={() => onDismiss(p)}
         >
           <X size={14} /> Dismiss
         </button>
@@ -365,7 +525,7 @@ function TabBtn({
       className={`px-3 py-1.5 text-sm font-medium border-b-2 -mb-px flex items-center gap-1.5 ${
         active
           ? 'border-brand-500 text-brand-700'
-          : 'border-transparent text-slate-500 hover:text-slate-800'
+          : 'border-transparent text-text-muted hover:text-text-primary'
       }`}
     >
       {children}
@@ -375,7 +535,7 @@ function TabBtn({
 
 function ExperimentStatus({ status }: { status: ExperimentRow['status'] }) {
   const styles: Record<ExperimentRow['status'], string> = {
-    draft: 'bg-slate-100 text-slate-500',
+    draft: 'bg-surface-muted text-text-muted',
     running: 'bg-amber-100 text-amber-700',
     completed: 'bg-emerald-100 text-emerald-700',
     stopped: 'bg-red-100 text-red-700',
