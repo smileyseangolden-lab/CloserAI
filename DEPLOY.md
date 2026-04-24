@@ -142,6 +142,33 @@ Click "Pause all outbound" in the sidebar footer (owner/admin/manager roles)
 to stop every campaign-lead send instantly across the org. Surfaced via
 `PATCH /api/v1/organizations/current/pause-outbound`.
 
+## Data safety — never use `docker compose down -v` casually
+
+**Rule of thumb: do not suggest or run `docker compose down -v` unless it is
+absolutely necessary.** The `-v` flag removes the named volumes backing
+Postgres and Redis — i.e. it deletes your database and any queued jobs.
+There is no prompt and no undo.
+
+Safe day-to-day ops:
+
+- `docker compose down` — stops and removes containers, **keeps volumes**
+- `docker compose up -d --build` — rebuilds images and starts, **keeps volumes**
+- `docker compose restart server` — bounces one service, nothing is touched
+
+`docker compose down -v` should only ever be used when:
+
+1. You explicitly want to nuke the local DB (demo box, throwaway test env),
+   **and** you have confirmed there is nothing worth keeping, **and**
+2. A dump has been taken first if there's any chance you'll want the data back:
+   ```bash
+   docker compose exec postgres pg_dump -U closerai closerai > backup-$(date +%F).sql
+   ```
+
+If a rebuild fails because of stale `node_modules` in a container, fix it
+without touching volumes — rebuild the service image (`docker compose build
+--no-cache server client`) or prune dangling images
+(`docker image prune`). Deleting volumes is never the right first step.
+
 ## Rollback
 
 ```bash
