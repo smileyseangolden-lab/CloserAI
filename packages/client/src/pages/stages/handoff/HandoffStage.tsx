@@ -60,6 +60,8 @@ export function HandoffStage() {
         naturalLanguageRule: compileInput.trim(),
       });
       setCompiled(out);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not compile rule');
     } finally {
       setCompiling(false);
     }
@@ -67,15 +69,20 @@ export function HandoffStage() {
 
   async function saveCompiled() {
     if (!compileInput.trim() || !compiled) return;
-    await api.post('/handoff/rules', {
-      name: compileInput.slice(0, 60),
-      naturalLanguageRule: compileInput,
-      triggerConfig: compiled as Record<string, unknown>,
-      priority: rules.length,
-    });
-    setCompileInput('');
-    setCompiled(null);
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.post('/handoff/rules', {
+        name: compileInput.slice(0, 60),
+        naturalLanguageRule: compileInput,
+        triggerConfig: compiled as Record<string, unknown>,
+        priority: rules.length,
+      });
+      toast.success('Rule saved');
+      setCompileInput('');
+      setCompiled(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save rule');
+    }
   }
 
   async function confirmDelete() {

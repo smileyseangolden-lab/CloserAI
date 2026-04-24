@@ -3,6 +3,7 @@ import { Globe2, Check } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
+import { toast } from '../../../components/ui';
 
 interface BusinessProfile {
   id: string;
@@ -52,6 +53,8 @@ export function CompanyProfileStage() {
       // Bump the assistant's history by triggering a remount of StepAssistant.
       // We key the component so it re-fetches messages.
       setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not start profile draft');
     } finally {
       setKicking(false);
     }

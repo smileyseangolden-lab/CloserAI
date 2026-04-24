@@ -56,9 +56,12 @@ export function KnowledgeStage() {
         title: pasteTitle.trim(),
         content: pasteContent.trim(),
       });
+      toast.success('Knowledge entry added');
       setPasteTitle('');
       setPasteContent('');
       setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save entry');
     } finally {
       setBusy(null);
     }
@@ -69,8 +72,11 @@ export function KnowledgeStage() {
     setBusy('url');
     try {
       await api.post('/knowledge/ingest-url', { url: urlInput.trim() });
+      toast.success('URL ingested');
       setUrlInput('');
       setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ingest failed');
     } finally {
       setBusy(null);
     }
@@ -93,8 +99,12 @@ export function KnowledgeStage() {
 
   async function runSearch() {
     if (!searchQ.trim()) return setHits(null);
-    const r = await api.post<SearchHit[]>('/knowledge/search', { q: searchQ.trim() });
-    setHits(r);
+    try {
+      const r = await api.post<SearchHit[]>('/knowledge/search', { q: searchQ.trim() });
+      setHits(r);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Search failed');
+    }
   }
 
   async function uploadPdf(file: File) {

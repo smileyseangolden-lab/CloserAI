@@ -247,7 +247,10 @@ function MappingEditor({
       await api.put(`/crm/connections/${connectionId}/mappings`, {
         mappings: mappings.filter((m) => m.localField && m.remoteField),
       });
+      toast.success('Field mappings saved');
       onSaved();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not save mappings');
     } finally {
       setSaving(false);
     }
@@ -255,11 +258,15 @@ function MappingEditor({
 
   async function testPush() {
     setTestResult(null);
-    const r = await api.post<{ endpoint: string; payload: unknown }>(
-      `/crm/connections/${connectionId}/test-push`,
-      {},
-    );
-    setTestResult(r);
+    try {
+      const r = await api.post<{ endpoint: string; payload: unknown }>(
+        `/crm/connections/${connectionId}/test-push`,
+        {},
+      );
+      setTestResult(r);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Test push failed');
+    }
   }
 
   function updateRow(index: number, patch: Partial<Mapping>) {

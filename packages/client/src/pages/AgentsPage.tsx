@@ -1,9 +1,30 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Plus, Bot } from 'lucide-react';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
-import { EmptyState, SkeletonCard } from '../components/ui';
+import {
+  Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  EmptyState,
+  Field,
+  FieldError,
+  FieldHint,
+  FieldLabel,
+  Input,
+  Select,
+  SkeletonCard,
+  toast,
+} from '../components/ui';
 
 interface Agent {
   id: string;
@@ -22,16 +43,35 @@ const typeColors: Record<string, string> = {
   hybrid: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300',
 };
 
+const AGENT_TYPES = [
+  { value: 'prospector', label: 'Prospector' },
+  { value: 'nurturer', label: 'Nurturer' },
+  { value: 'closer', label: 'Closer' },
+  { value: 'hybrid', label: 'Hybrid' },
+];
+
+const PERSONALITY_STYLES = [
+  { value: 'technical', label: 'Technical' },
+  { value: 'consultative', label: 'Consultative' },
+  { value: 'social_friendly', label: 'Social & friendly' },
+  { value: 'executive', label: 'Executive' },
+  { value: 'challenger', label: 'Challenger' },
+  { value: 'educational', label: 'Educational' },
+];
+
 export function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    setLoading(true);
     void api
       .get<Agent[]>('/agents')
       .then(setAgents)
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshKey]);
 
   return (
     <div className="p-4 md:p-8 max-w-6xl">
@@ -39,7 +79,7 @@ export function AgentsPage() {
         title="Agents"
         subtitle="AI personalities that handle your outreach and closing"
         actions={
-          <button className="btn-primary">
+          <button className="btn-primary" onClick={() => setCreateOpen(true)}>
             <Plus size={16} />
             New agent
           </button>
@@ -57,11 +97,16 @@ export function AgentsPage() {
           <EmptyState
             icon={Bot}
             title="No agents yet"
-            description="Build your first AI persona. The Agent Builder stage walks you through tone, personality, and sender identity."
+            description="Spin up an AI persona with a name and tone. The Agent Builder stage lets you go deeper with system prompts, writing examples, and escalation rules."
             action={
-              <Link to="/stages/agent_builder" className="btn-primary">
-                <Plus size={16} /> Build an agent
-              </Link>
+              <>
+                <button className="btn-primary" onClick={() => setCreateOpen(true)}>
+                  <Plus size={16} /> New agent
+                </button>
+                <Link to="/stages/agent-builder" className="btn-secondary">
+                  Open Agent Builder
+                </Link>
+              </>
             }
           />
         </div>
@@ -97,6 +142,159 @@ export function AgentsPage() {
           ))}
         </div>
       )}
+
+      <CreateAgentDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => setRefreshKey((k) => k + 1)}
+      />
     </div>
+  );
+}
+
+const agentCreateSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required'),
+  agentType: z.enum(['prospector', 'nurturer', 'closer', 'hybrid']),
+  personalityStyle: z.enum([
+    'technical',
+    'consultative',
+    'social_friendly',
+    'executive',
+    'challenger',
+    'educational',
+  ]),
+  senderName: z.string().trim().min(1, 'Sender name is required'),
+  senderTitle: z.string().trim().optional(),
+});
+
+type AgentCreateValues = z.infer<typeof agentCreateSchema>;
+
+function CreateAgentDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: () => void;
+}) {
+  const navigate = useNavigate();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting, isValid },
+  } = useForm<AgentCreateValues>({
+    resolver: zodResolver(agentCreateSchema),
+    mode: 'onChange',
+    defaultValues: {
+      name: '',
+      agentType: 'prospector',
+      personalityStyle: 'consultative',
+      senderName: '',
+      senderTitle: '',
+    },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      const payload: Record<string, unknown> = {
+        name: values.name,
+        agentType: values.agentType,
+        personalityStyle: values.personalityStyle,
+        senderName: values.senderName,
+      };
+      if (values.senderTitle?.trim()) payload.senderTitle = values.senderTitle.trim();
+      const created = await api.post<{ id: string }>('/agents', payload);
+      toast.success('Agent created');
+      onCreated();
+      onOpenChange(false);
+      reset();
+      navigate(`/agents/${created.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not create agent');
+    }
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) reset();
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <form onSubmit={onSubmit} noValidate>
+          <DialogHeader>
+            <DialogTitle>New agent</DialogTitle>
+            <DialogDescription>
+              Quick-create an agent with the essentials. Flesh out tone, writing style, and
+              escalation rules in the Agent Builder stage afterwards.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <Field>
+              <FieldLabel htmlFor="a-name">Agent name</FieldLabel>
+              <Input
+                id="a-name"
+                autoFocus
+                placeholder="Alex, the friendly closer"
+                aria-invalid={errors.name ? 'true' : 'false'}
+                {...register('name')}
+              />
+              <FieldError>{errors.name?.message}</FieldError>
+              <FieldHint>Internal name — not shown to prospects.</FieldHint>
+            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field>
+                <FieldLabel htmlFor="a-type">Role</FieldLabel>
+                <Select id="a-type" options={AGENT_TYPES} {...register('agentType')} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="a-style">Personality</FieldLabel>
+                <Select
+                  id="a-style"
+                  options={PERSONALITY_STYLES}
+                  {...register('personalityStyle')}
+                />
+              </Field>
+            </div>
+            <Field>
+              <FieldLabel htmlFor="a-sender">Sender name</FieldLabel>
+              <Input
+                id="a-sender"
+                placeholder="Alex Rivera"
+                aria-invalid={errors.senderName ? 'true' : 'false'}
+                {...register('senderName')}
+              />
+              <FieldError>{errors.senderName?.message}</FieldError>
+              <FieldHint>Shown on outbound messages.</FieldHint>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="a-title">Sender title (optional)</FieldLabel>
+              <Input
+                id="a-title"
+                placeholder="Account Executive"
+                {...register('senderTitle')}
+              />
+            </Field>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={isSubmitting} disabled={!isValid}>
+              Create agent
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

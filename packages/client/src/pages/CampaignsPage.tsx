@@ -1,9 +1,30 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Plus, Megaphone } from 'lucide-react';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
-import { EmptyState, SkeletonCard } from '../components/ui';
+import {
+  Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  EmptyState,
+  Field,
+  FieldError,
+  FieldLabel,
+  Input,
+  Select,
+  SkeletonCard,
+  Textarea,
+  toast,
+} from '../components/ui';
 
 interface Campaign {
   id: string;
@@ -24,16 +45,37 @@ const statusColors: Record<string, string> = {
   archived: 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500',
 };
 
+const CAMPAIGN_TYPES: Array<{ value: string; label: string }> = [
+  { value: 'outbound_cold', label: 'Outbound cold' },
+  { value: 'nurture_warm', label: 'Nurture warm' },
+  { value: 're_engagement', label: 'Re-engagement' },
+  { value: 'event_follow_up', label: 'Event follow-up' },
+  { value: 'closing', label: 'Closing' },
+  { value: 'custom', label: 'Custom' },
+];
+
+const CAMPAIGN_STRATEGIES: Array<{ value: string; label: string }> = [
+  { value: 'educational', label: 'Educational' },
+  { value: 'direct', label: 'Direct' },
+  { value: 'social_proof', label: 'Social proof' },
+  { value: 'pain_point', label: 'Pain point' },
+  { value: 'challenger', label: 'Challenger' },
+  { value: 'value_first', label: 'Value first' },
+];
+
 export function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    setLoading(true);
     void api
       .get<Campaign[]>('/campaigns')
       .then(setCampaigns)
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshKey]);
 
   return (
     <div className="p-4 md:p-8 max-w-7xl">
@@ -41,7 +83,7 @@ export function CampaignsPage() {
         title="Campaigns"
         subtitle="Orchestrate outbound and nurture cadences"
         actions={
-          <button className="btn-primary">
+          <button className="btn-primary" onClick={() => setCreateOpen(true)}>
             <Plus size={16} />
             New campaign
           </button>
@@ -61,9 +103,14 @@ export function CampaignsPage() {
             title="No campaigns yet"
             description="Campaigns bundle your cadence, agents, and target ICP into an orchestrated outbound flow."
             action={
-              <Link to="/stages/agent_builder" className="btn-primary">
-                <Plus size={16} /> Create a campaign
-              </Link>
+              <>
+                <button className="btn-primary" onClick={() => setCreateOpen(true)}>
+                  <Plus size={16} /> New campaign
+                </button>
+                <Link to="/stages/agent-builder" className="btn-secondary">
+                  Design in Agent Builder
+                </Link>
+              </>
             }
           />
         </div>
@@ -91,6 +138,151 @@ export function CampaignsPage() {
           ))}
         </div>
       )}
+
+      <CreateCampaignDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => setRefreshKey((k) => k + 1)}
+      />
     </div>
+  );
+}
+
+const campaignCreateSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required'),
+  campaignType: z.enum([
+    'outbound_cold',
+    'nurture_warm',
+    're_engagement',
+    'event_follow_up',
+    'closing',
+    'custom',
+  ]),
+  strategy: z.enum([
+    'educational',
+    'direct',
+    'social_proof',
+    'pain_point',
+    'challenger',
+    'value_first',
+  ]),
+  description: z.string().trim().max(2000).optional(),
+});
+
+type CampaignCreateValues = z.infer<typeof campaignCreateSchema>;
+
+function CreateCampaignDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: () => void;
+}) {
+  const navigate = useNavigate();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting, isValid },
+  } = useForm<CampaignCreateValues>({
+    resolver: zodResolver(campaignCreateSchema),
+    mode: 'onChange',
+    defaultValues: {
+      name: '',
+      campaignType: 'outbound_cold',
+      strategy: 'educational',
+      description: '',
+    },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      const payload: Record<string, unknown> = {
+        name: values.name,
+        campaignType: values.campaignType,
+        strategy: values.strategy,
+      };
+      if (values.description?.trim()) payload.description = values.description.trim();
+      const created = await api.post<{ id: string }>('/campaigns', payload);
+      toast.success('Campaign created');
+      onCreated();
+      onOpenChange(false);
+      reset();
+      navigate(`/campaigns/${created.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not create campaign');
+    }
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) reset();
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <form onSubmit={onSubmit} noValidate>
+          <DialogHeader>
+            <DialogTitle>New campaign</DialogTitle>
+            <DialogDescription>
+              Create a campaign draft. You can attach agents, ICP, and a cadence after.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <Field>
+              <FieldLabel htmlFor="c-name">Name</FieldLabel>
+              <Input
+                id="c-name"
+                autoFocus
+                placeholder="Q2 outbound — VP Sales"
+                aria-invalid={errors.name ? 'true' : 'false'}
+                {...register('name')}
+              />
+              <FieldError>{errors.name?.message}</FieldError>
+            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field>
+                <FieldLabel htmlFor="c-type">Type</FieldLabel>
+                <Select id="c-type" options={CAMPAIGN_TYPES} {...register('campaignType')} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="c-strategy">Strategy</FieldLabel>
+                <Select
+                  id="c-strategy"
+                  options={CAMPAIGN_STRATEGIES}
+                  {...register('strategy')}
+                />
+              </Field>
+            </div>
+            <Field>
+              <FieldLabel htmlFor="c-description">Description (optional)</FieldLabel>
+              <Textarea
+                id="c-description"
+                rows={3}
+                placeholder="What's this campaign trying to accomplish?"
+                {...register('description')}
+              />
+            </Field>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={isSubmitting} disabled={!isValid}>
+              Create campaign
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

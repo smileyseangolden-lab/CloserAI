@@ -3,6 +3,7 @@ import { Bot, Mail, Linkedin, MessageSquare, Send, Sparkles, Users, Check } from
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
+import { toast } from '../../../components/ui';
 
 interface CatalogAgent {
   key: string;
@@ -77,7 +78,10 @@ export function AgentBuilderStage() {
     setActivating(key);
     try {
       await api.post(`/agents/catalog/${key}/activate`, {});
+      toast.success('Agent activated');
       setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not activate agent');
     } finally {
       setActivating(null);
     }

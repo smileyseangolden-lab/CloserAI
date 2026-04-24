@@ -70,6 +70,7 @@ export function PilotStage() {
     try {
       const r = await api.post<PilotRunRow>('/pilot', {});
       setOpenId(r.id);
+      toast.success('Pilot run started');
       setRefreshKey((k) => k + 1);
       // Poll a few times so the user sees the run flip to ready_for_review.
       let n = 0;
@@ -78,6 +79,8 @@ export function PilotStage() {
         setRefreshKey((k) => k + 1);
         if (n >= 6) clearInterval(interval);
       }, 3000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not start pilot');
     } finally {
       setBusy(false);
     }

@@ -3,6 +3,7 @@ import { Target } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
+import { toast } from '../../../components/ui';
 
 interface IcpRow {
   id: string;
@@ -49,6 +50,9 @@ export function IcpStage() {
         ),
       );
       setPushedAt(new Date().toLocaleTimeString());
+      toast.success('ICP filters pushed to data sources');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not push ICP filters');
     } finally {
       setPushBusy(false);
     }

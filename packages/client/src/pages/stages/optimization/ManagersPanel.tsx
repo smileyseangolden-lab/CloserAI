@@ -10,6 +10,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { api } from '../../../api/client';
+import { toast } from '../../../components/ui';
 
 type ManagerRole = 'sales_manager' | 'marketing_manager' | 'cro';
 type Cadence = 'hourly' | 'daily' | 'weekly' | 'manual';
@@ -83,22 +84,38 @@ export function ManagersPanel() {
   const managerByRole = new Map(managers.map((m) => [m.role, m]));
 
   async function enable(role: ManagerRole, cadence?: Cadence) {
-    await api.post('/managers/enable', { role, cadence });
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.post('/managers/enable', { role, cadence });
+      toast.success('Manager enabled');
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not enable manager');
+    }
   }
   async function toggle(id: string, active: boolean) {
-    await api.patch(`/managers/${id}`, { isActive: active });
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.patch(`/managers/${id}`, { isActive: active });
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update manager');
+    }
   }
   async function setCadence(id: string, cadence: Cadence) {
-    await api.patch(`/managers/${id}`, { cadence });
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.patch(`/managers/${id}`, { cadence });
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update cadence');
+    }
   }
   async function runNow(id: string) {
     setRunningId(id);
     try {
       await api.post(`/managers/${id}/run-now`, {});
+      toast.success('Manager run triggered — back in ~20s');
       setTimeout(() => setRefreshKey((k) => k + 1), 20_000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not trigger run');
     } finally {
       setRunningId(null);
     }

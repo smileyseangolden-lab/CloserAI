@@ -17,6 +17,7 @@ export { Skeleton, SkeletonCard, SkeletonRow, SkeletonText } from './Skeleton';
 export { Spinner, LoadingBlock } from './Spinner';
 export { EmptyState } from './EmptyState';
 export { Input, Textarea } from './Input';
+export { Select, type SelectOption } from './Select';
 export { Toaster, toast } from './Toast';
 export { PageHeader } from './PageHeader';
 export { StatCard } from './StatCard';

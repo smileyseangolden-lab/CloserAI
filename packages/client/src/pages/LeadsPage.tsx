@@ -1,8 +1,29 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
-import { EmptyState, Pagination, SkeletonCard, SkeletonRow } from '../components/ui';
+import {
+  Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  EmptyState,
+  Field,
+  FieldError,
+  FieldLabel,
+  Input,
+  Pagination,
+  SkeletonCard,
+  SkeletonRow,
+  toast,
+} from '../components/ui';
 import { Plus, Users } from 'lucide-react';
 
 interface Lead {
@@ -34,6 +55,8 @@ export function LeadsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     setLoading(true);
@@ -45,7 +68,7 @@ export function LeadsPage() {
         setTotal(res.total ?? res.data.length);
       })
       .finally(() => setLoading(false));
-  }, [page, pageSize]);
+  }, [page, pageSize, refreshKey]);
 
   useEffect(() => {
     setPage(1);
@@ -59,14 +82,30 @@ export function LeadsPage() {
           <EmptyState
             icon={Users}
             title="No leads yet"
-            description="Generate or import leads to start outbound outreach. Your first pass comes from the Data Sources stage."
+            description="Add a lead manually, or generate a batch from the Data Sources stage."
             action={
-              <Link to="/stages/data_sources" className="btn-primary">
-                <Plus size={16} /> Generate leads
-              </Link>
+              <>
+                <button
+                  className="btn-primary"
+                  onClick={() => setCreateOpen(true)}
+                >
+                  <Plus size={16} /> Add lead
+                </button>
+                <Link to="/stages/data-sources" className="btn-secondary">
+                  Generate leads
+                </Link>
+              </>
             }
           />
         </div>
+        <CreateLeadDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          onCreated={() => {
+            setRefreshKey((k) => k + 1);
+            setPage(1);
+          }}
+        />
       </div>
     );
   }
@@ -77,7 +116,7 @@ export function LeadsPage() {
         title="Leads"
         subtitle="All leads in your workspace"
         actions={
-          <button className="btn-primary">
+          <button className="btn-primary" onClick={() => setCreateOpen(true)}>
             <Plus size={16} />
             Add lead
           </button>
@@ -178,7 +217,148 @@ export function LeadsPage() {
           onPageSizeChange={setPageSize}
         />
       </div>
+
+      <CreateLeadDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          setRefreshKey((k) => k + 1);
+          setPage(1);
+        }}
+      />
     </div>
+  );
+}
+
+const leadCreateSchema = z.object({
+  companyName: z.string().trim().min(1, 'Company name is required'),
+  companyWebsite: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (v) => !v || /^https?:\/\//i.test(v),
+      'Website should start with http:// or https://',
+    ),
+  companyIndustry: z.string().trim().optional(),
+  companyLocation: z.string().trim().optional(),
+});
+
+type LeadCreateValues = z.infer<typeof leadCreateSchema>;
+
+function CreateLeadDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: () => void;
+}) {
+  const navigate = useNavigate();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting, isValid },
+  } = useForm<LeadCreateValues>({
+    resolver: zodResolver(leadCreateSchema),
+    mode: 'onChange',
+    defaultValues: {
+      companyName: '',
+      companyWebsite: '',
+      companyIndustry: '',
+      companyLocation: '',
+    },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    try {
+      const payload: Record<string, unknown> = {
+        companyName: values.companyName,
+        source: 'manual',
+      };
+      if (values.companyWebsite?.trim()) payload.companyWebsite = values.companyWebsite.trim();
+      if (values.companyIndustry?.trim())
+        payload.companyIndustry = values.companyIndustry.trim();
+      if (values.companyLocation?.trim())
+        payload.companyLocation = values.companyLocation.trim();
+
+      const created = await api.post<{ id: string }>('/leads', payload);
+      toast.success('Lead added');
+      onCreated();
+      onOpenChange(false);
+      reset();
+      navigate(`/leads/${created.id}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not add lead');
+    }
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) reset();
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent>
+        <form onSubmit={onSubmit} noValidate>
+          <DialogHeader>
+            <DialogTitle>Add lead</DialogTitle>
+            <DialogDescription>
+              Create a lead manually. You can enrich and score it after.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <Field>
+              <FieldLabel htmlFor="companyName">Company name</FieldLabel>
+              <Input
+                id="companyName"
+                autoFocus
+                aria-invalid={errors.companyName ? 'true' : 'false'}
+                {...register('companyName')}
+              />
+              <FieldError>{errors.companyName?.message}</FieldError>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="companyWebsite">Website</FieldLabel>
+              <Input
+                id="companyWebsite"
+                placeholder="https://example.com"
+                aria-invalid={errors.companyWebsite ? 'true' : 'false'}
+                {...register('companyWebsite')}
+              />
+              <FieldError>{errors.companyWebsite?.message}</FieldError>
+            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field>
+                <FieldLabel htmlFor="companyIndustry">Industry</FieldLabel>
+                <Input id="companyIndustry" {...register('companyIndustry')} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="companyLocation">Location</FieldLabel>
+                <Input id="companyLocation" {...register('companyLocation')} />
+              </Field>
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={isSubmitting} disabled={!isValid}>
+              Add lead
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

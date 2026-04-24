@@ -81,15 +81,23 @@ export function OptimizationStage() {
     if (!scheduler) return;
     const next = !scheduler.enabled;
     setScheduler({ ...scheduler, enabled: next });
-    await api.patch('/optimization/scheduler', { enabled: next });
+    try {
+      await api.patch('/optimization/scheduler', { enabled: next });
+      toast.success(next ? 'Continuous optimization on' : 'Continuous optimization off');
+    } catch (err) {
+      setScheduler({ ...scheduler, enabled: !next });
+      toast.error(err instanceof Error ? err.message : 'Could not update scheduler');
+    }
   }
 
   async function runNow() {
     setRunBusy(true);
     try {
       await api.post('/optimization/scheduler/run-now', {});
-      // Give the worker ~20s to produce proposals, then refetch.
+      toast.success('Optimizer triggered — proposals in ~20s');
       setTimeout(() => setRefreshKey((k) => k + 1), 20_000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not trigger optimizer');
     } finally {
       setRunBusy(false);
     }
