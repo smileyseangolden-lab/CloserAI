@@ -20,6 +20,7 @@ import {
   FieldError,
   FieldLabel,
   Input,
+  Pagination,
   Select,
   SkeletonCard,
   Textarea,
@@ -68,14 +69,27 @@ export function CampaignsPage() {
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     setLoading(true);
+    const offset = (page - 1) * pageSize;
     void api
-      .get<Campaign[]>('/campaigns')
-      .then(setCampaigns)
+      .get<{ data: Campaign[]; total: number }>(
+        `/campaigns?limit=${pageSize}&offset=${offset}`,
+      )
+      .then((r) => {
+        setCampaigns(r.data);
+        setTotal(r.total ?? r.data.length);
+      })
       .finally(() => setLoading(false));
-  }, [refreshKey]);
+  }, [page, pageSize, refreshKey]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize]);
 
   return (
     <div className="p-4 md:p-8 max-w-7xl">
@@ -136,6 +150,18 @@ export function CampaignsPage() {
               {c.description && <p className="text-sm text-text-secondary">{c.description}</p>}
             </Link>
           ))}
+        </div>
+      )}
+
+      {total > 0 && (
+        <div className="mt-4">
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </div>
       )}
 

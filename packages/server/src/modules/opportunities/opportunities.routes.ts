@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/index.js';
 import { opportunities, opportunityStageHistory, activities } from '../../db/schema.js';
@@ -34,18 +34,39 @@ const opportunitySchema = z.object({
   expectedCloseDate: z.string().optional(),
 });
 
+const listQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(1000).default(500),
+  offset: z.coerce.number().int().min(0).default(0),
+  stage: z.string().optional(),
+});
+
 opportunitiesRouter.get('/', async (req, res, next) => {
   try {
-    const rows = await db
-      .select()
-      .from(opportunities)
-      .where(
-        and(
-          eq(opportunities.organizationId, req.auth!.organizationId),
-          isNull(opportunities.deletedAt),
-        ),
-      );
-    res.json(rows);
+    const q = listQuerySchema.parse(req.query);
+    const conditions = [
+      eq(opportunities.organizationId, req.auth!.organizationId),
+      isNull(opportunities.deletedAt),
+    ];
+    if (q.stage) conditions.push(sql`${opportunities.stage}::text = ${q.stage}`);
+    const where = and(...conditions);
+
+    const [rows, totalRow] = await Promise.all([
+      db
+        .select()
+        .from(opportunities)
+        .where(where)
+        .orderBy(desc(opportunities.updatedAt))
+        .limit(q.limit)
+        .offset(q.offset),
+      db.select({ total: sql<number>`count(*)::int` }).from(opportunities).where(where),
+    ]);
+
+    res.json({
+      data: rows,
+      total: totalRow[0]?.total ?? 0,
+      limit: q.limit,
+      offset: q.offset,
+    });
   } catch (err) {
     next(err);
   }

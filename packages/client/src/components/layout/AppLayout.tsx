@@ -5,6 +5,7 @@ import {
   LogOut,
   Plug,
   CheckCircle2,
+  FileClock,
   Loader2,
   AlertOctagon,
   Play,
@@ -285,6 +286,20 @@ function SidebarContents({
             >
               <Plug size={18} />
               Integrations
+            </NavLink>
+            <NavLink
+              to="/admin/audit"
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                  isActive
+                    ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
+                    : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary'
+                }`
+              }
+            >
+              <FileClock size={18} />
+              Audit log
             </NavLink>
           </>
         )}

@@ -27,6 +27,8 @@ import { queriesRouter } from './modules/queries/queries.routes.js';
 import { optimizationRouter } from './modules/optimization/optimization.routes.js';
 import { crmRouter } from './modules/crm/crm.routes.js';
 import { managersRouter } from './modules/managers/managers.routes.js';
+import { searchRouter } from './modules/search/search.routes.js';
+import { auditRouter } from './modules/audit/audit.routes.js';
 
 export function createApiRouter() {
   const api = Router();
@@ -63,6 +65,8 @@ export function createApiRouter() {
   api.use('/optimization', requireAuth, optimizationRouter);
   api.use('/crm', requireAuth, crmRouter);
   api.use('/managers', requireAuth, managersRouter);
+  api.use('/search', requireAuth, searchRouter);
+  api.use('/audit', requireAuth, auditRouter);
 
   return api;
 }

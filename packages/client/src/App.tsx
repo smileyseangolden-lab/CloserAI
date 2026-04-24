@@ -17,6 +17,7 @@ import { OpportunitiesPage } from './pages/OpportunitiesPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
+import { AuditLogPage } from './pages/AuditLogPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { CrmCallbackPage } from './pages/oauth/CrmCallbackPage';
 import { DashboardBuilderPage } from './pages/dashboards/DashboardBuilderPage';
@@ -74,6 +75,7 @@ export default function App() {
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="settings/*" element={<SettingsPage />} />
         <Route path="admin/integrations" element={<IntegrationsPage />} />
+        <Route path="admin/audit" element={<AuditLogPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

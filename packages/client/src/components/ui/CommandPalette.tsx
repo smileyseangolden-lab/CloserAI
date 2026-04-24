@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Command } from 'cmdk';
 import { useNavigate } from 'react-router';
 import {
   BarChart3,
   Bot,
+  FileClock,
   LayoutDashboard,
+  Loader2,
   Megaphone,
   Plug,
   Settings as SettingsIcon,
   Target,
+  User2,
   Users,
 } from 'lucide-react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
@@ -17,18 +20,16 @@ import { api } from '@/api/client';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/cn';
 
-interface LeadHit {
-  id: string;
-  companyName: string;
-}
-interface CampaignHit {
-  id: string;
-  name: string;
-}
-interface AgentHit {
-  id: string;
-  name: string;
-  senderName: string | null;
+interface SearchResults {
+  leads: Array<{ id: string; title: string; subtitle: string | null }>;
+  campaigns: Array<{ id: string; title: string; subtitle: string | null }>;
+  agents: Array<{ id: string; title: string; subtitle: string | null }>;
+  contacts: Array<{
+    id: string;
+    leadId: string | null;
+    title: string;
+    subtitle: string | null;
+  }>;
 }
 
 interface CommandPaletteProps {
@@ -39,31 +40,52 @@ interface CommandPaletteProps {
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
   const { toggle: toggleTheme } = useTheme();
-  const [leads, setLeads] = useState<LeadHit[] | null>(null);
-  const [campaigns, setCampaigns] = useState<CampaignHit[] | null>(null);
-  const [agents, setAgents] = useState<AgentHit[] | null>(null);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResults | null>(null);
+  const [searching, setSearching] = useState(false);
+  const debounceRef = useRef<number | null>(null);
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    if (!open) {
+      setQuery('');
+      setResults(null);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    if (leads === null) {
-      void api
-        .get<{ data: LeadHit[] }>('/leads?limit=50')
-        .then((r) => setLeads(r.data))
-        .catch(() => setLeads([]));
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+
+    const term = query.trim();
+    if (term.length < 2) {
+      setResults(null);
+      setSearching(false);
+      return;
     }
-    if (campaigns === null) {
+
+    setSearching(true);
+    const thisRequest = ++requestIdRef.current;
+    debounceRef.current = window.setTimeout(() => {
       void api
-        .get<CampaignHit[]>('/campaigns')
-        .then(setCampaigns)
-        .catch(() => setCampaigns([]));
-    }
-    if (agents === null) {
-      void api
-        .get<AgentHit[]>('/agents')
-        .then(setAgents)
-        .catch(() => setAgents([]));
-    }
-  }, [open, leads, campaigns, agents]);
+        .get<SearchResults>(`/search?q=${encodeURIComponent(term)}`)
+        .then((r) => {
+          if (thisRequest !== requestIdRef.current) return;
+          setResults(r);
+        })
+        .catch(() => {
+          if (thisRequest !== requestIdRef.current) return;
+          setResults({ leads: [], campaigns: [], agents: [], contacts: [] });
+        })
+        .finally(() => {
+          if (thisRequest === requestIdRef.current) setSearching(false);
+        });
+    }, 180);
+
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, [query, open]);
 
   const go = (path: string) => {
     onOpenChange(false);
@@ -80,9 +102,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       { label: 'Analytics', icon: BarChart3, path: '/analytics' },
       { label: 'Settings', icon: SettingsIcon, path: '/settings' },
       { label: 'Integrations', icon: Plug, path: '/admin/integrations' },
+      { label: 'Audit log', icon: FileClock, path: '/admin/audit' },
     ],
     [],
   );
+
+  const hasResults =
+    results &&
+    (results.leads.length > 0 ||
+      results.campaigns.length > 0 ||
+      results.agents.length > 0 ||
+      results.contacts.length > 0);
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -105,96 +135,164 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <DialogPrimitive.Title className="sr-only">Command palette</DialogPrimitive.Title>
           <Command
             label="Command menu"
+            shouldFilter={false}
             className="flex h-full flex-col overflow-hidden rounded-xl"
           >
-            <Command.Input
-              placeholder="Search pages, stages, leads, campaigns, agents…"
-              className="w-full border-b border-border-default bg-transparent px-4 py-3 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-            />
+            <div className="relative border-b border-border-default">
+              <Command.Input
+                value={query}
+                onValueChange={setQuery}
+                placeholder="Search pages, stages, leads, campaigns, agents, contacts…"
+                className="w-full bg-transparent px-4 py-3 pr-10 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+              />
+              {searching && (
+                <Loader2
+                  size={14}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-text-muted"
+                  aria-label="Searching"
+                />
+              )}
+            </div>
             <Command.List className="max-h-[60vh] overflow-y-auto p-2">
               <Command.Empty className="px-3 py-6 text-center text-sm text-text-muted">
-                No results.
+                {query.trim().length < 2
+                  ? 'Start typing to search, or pick a page below.'
+                  : searching
+                    ? 'Searching…'
+                    : 'No results.'}
               </Command.Empty>
 
-              <Group heading="Go to">
-                {topLevel.map(({ label, icon: Icon, path }) => (
-                  <Item key={path} onSelect={() => go(path)} icon={<Icon className="h-4 w-4" />}>
-                    {label}
-                  </Item>
-                ))}
-                <Item
-                  onSelect={() => {
-                    onOpenChange(false);
-                    toggleTheme();
-                  }}
-                  icon={<SettingsIcon className="h-4 w-4" />}
-                >
-                  Toggle dark mode
-                </Item>
-              </Group>
+              {/* Pages + stages always available when there's no active query */}
+              {query.trim().length < 2 && (
+                <>
+                  <Group heading="Go to">
+                    {topLevel.map(({ label, icon: Icon, path }) => (
+                      <Item
+                        key={path}
+                        onSelect={() => go(path)}
+                        icon={<Icon className="h-4 w-4" />}
+                      >
+                        {label}
+                      </Item>
+                    ))}
+                    <Item
+                      onSelect={() => {
+                        onOpenChange(false);
+                        toggleTheme();
+                      }}
+                      icon={<SettingsIcon className="h-4 w-4" />}
+                    >
+                      Toggle dark mode
+                    </Item>
+                  </Group>
 
-              <Group heading="Workflow stages">
-                {STAGES.map((stage) => (
-                  <Item
-                    key={stage.id}
-                    value={`stage-${stage.title}-${stage.description}`}
-                    onSelect={() => go(`/stages/${stage.id}`)}
-                    icon={<stage.icon className="h-4 w-4" />}
-                  >
-                    <span className="font-medium">
-                      {stage.order}. {stage.title}
-                    </span>
-                    <span className="ml-2 text-xs text-text-muted">{stage.description}</span>
-                  </Item>
-                ))}
-              </Group>
+                  <Group heading="Workflow stages">
+                    {STAGES.map((stage) => (
+                      <Item
+                        key={stage.id}
+                        value={`stage-${stage.title}`}
+                        onSelect={() => go(`/stages/${stage.id}`)}
+                        icon={<stage.icon className="h-4 w-4" />}
+                      >
+                        <span className="font-medium">
+                          {stage.order}. {stage.title}
+                        </span>
+                        <span className="ml-2 text-xs text-text-muted">
+                          {stage.description}
+                        </span>
+                      </Item>
+                    ))}
+                  </Group>
+                </>
+              )}
 
-              {leads && leads.length > 0 && (
+              {results?.leads && results.leads.length > 0 && (
                 <Group heading="Leads">
-                  {leads.slice(0, 10).map((l) => (
+                  {results.leads.map((l) => (
                     <Item
                       key={l.id}
-                      value={`lead-${l.companyName}`}
+                      value={`lead-${l.id}`}
                       onSelect={() => go(`/leads/${l.id}`)}
                       icon={<Users className="h-4 w-4" />}
                     >
-                      {l.companyName}
-                    </Item>
-                  ))}
-                </Group>
-              )}
-
-              {campaigns && campaigns.length > 0 && (
-                <Group heading="Campaigns">
-                  {campaigns.slice(0, 10).map((c) => (
-                    <Item
-                      key={c.id}
-                      value={`campaign-${c.name}`}
-                      onSelect={() => go(`/campaigns/${c.id}`)}
-                      icon={<Megaphone className="h-4 w-4" />}
-                    >
-                      {c.name}
-                    </Item>
-                  ))}
-                </Group>
-              )}
-
-              {agents && agents.length > 0 && (
-                <Group heading="Agents">
-                  {agents.slice(0, 10).map((a) => (
-                    <Item
-                      key={a.id}
-                      value={`agent-${a.name}-${a.senderName ?? ''}`}
-                      onSelect={() => go(`/agents/${a.id}`)}
-                      icon={<Bot className="h-4 w-4" />}
-                    >
-                      <span className="font-medium">{a.name}</span>
-                      {a.senderName && (
-                        <span className="ml-2 text-xs text-text-muted">{a.senderName}</span>
+                      <span className="font-medium">{l.title}</span>
+                      {l.subtitle && (
+                        <span className="ml-2 text-xs text-text-muted truncate">
+                          {l.subtitle}
+                        </span>
                       )}
                     </Item>
                   ))}
                 </Group>
+              )}
+
+              {results?.contacts && results.contacts.length > 0 && (
+                <Group heading="Contacts">
+                  {results.contacts.map((c) => (
+                    <Item
+                      key={c.id}
+                      value={`contact-${c.id}`}
+                      onSelect={() =>
+                        c.leadId ? go(`/leads/${c.leadId}`) : onOpenChange(false)
+                      }
+                      icon={<User2 className="h-4 w-4" />}
+                    >
+                      <span className="font-medium">{c.title}</span>
+                      {c.subtitle && (
+                        <span className="ml-2 text-xs text-text-muted truncate">
+                          {c.subtitle}
+                        </span>
+                      )}
+                    </Item>
+                  ))}
+                </Group>
+              )}
+
+              {results?.campaigns && results.campaigns.length > 0 && (
+                <Group heading="Campaigns">
+                  {results.campaigns.map((c) => (
+                    <Item
+                      key={c.id}
+                      value={`campaign-${c.id}`}
+                      onSelect={() => go(`/campaigns/${c.id}`)}
+                      icon={<Megaphone className="h-4 w-4" />}
+                    >
+                      <span className="font-medium">{c.title}</span>
+                      {c.subtitle && (
+                        <span className="ml-2 text-xs text-text-muted truncate">
+                          {c.subtitle.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                    </Item>
+                  ))}
+                </Group>
+              )}
+
+              {results?.agents && results.agents.length > 0 && (
+                <Group heading="Agents">
+                  {results.agents.map((a) => (
+                    <Item
+                      key={a.id}
+                      value={`agent-${a.id}`}
+                      onSelect={() => go(`/agents/${a.id}`)}
+                      icon={<Bot className="h-4 w-4" />}
+                    >
+                      <span className="font-medium">{a.title}</span>
+                      {a.subtitle && (
+                        <span className="ml-2 text-xs text-text-muted truncate">
+                          {a.subtitle}
+                        </span>
+                      )}
+                    </Item>
+                  ))}
+                </Group>
+              )}
+
+              {results && !hasResults && !searching && (
+                <div className="px-3 py-4 text-center text-xs text-text-muted">
+                  Nothing matches "{query}". Try a shorter term, or browse from the pages
+                  above.
+                </div>
               )}
             </Command.List>
             <div className="flex items-center justify-between border-t border-border-default bg-surface-muted px-3 py-2 text-[11px] text-text-muted">
@@ -244,7 +342,9 @@ function Item({
         'dark:data-[selected=true]:bg-brand-500/15 dark:data-[selected=true]:text-brand-300',
       )}
     >
-      {icon ? <span className="flex h-4 w-4 items-center justify-center text-text-muted">{icon}</span> : null}
+      {icon ? (
+        <span className="flex h-4 w-4 items-center justify-center text-text-muted">{icon}</span>
+      ) : null}
       <div className="flex flex-1 items-baseline gap-1 overflow-hidden">{children}</div>
     </Command.Item>
   );

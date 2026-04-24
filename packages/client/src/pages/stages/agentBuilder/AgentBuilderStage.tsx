@@ -53,8 +53,8 @@ export function AgentBuilderStage() {
 
   useEffect(() => {
     void api
-      .get<AgentRow[]>('/agents')
-      .then(setAgents)
+      .get<{ data: AgentRow[] }>('/agents?limit=200')
+      .then((r) => setAgents(r.data ?? []))
       .catch(() => setAgents([]));
   }, [refreshKey]);
 

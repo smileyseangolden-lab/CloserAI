@@ -227,15 +227,200 @@ export function CampaignDetailPage() {
           </TabsContent>
 
           <TabsContent value="analytics">
-            <EmptyState
-              compact
-              icon={BarChart3}
-              title="Analytics coming soon"
-              description="Send, open, reply, and conversion funnels per step are planned for the next iteration. The cross-campaign view lives in Analytics."
-            />
+            {id && <CampaignAnalyticsPanel campaignId={id} />}
           </TabsContent>
         </Tabs>
       </div>
+    </div>
+  );
+}
+
+interface CampaignAnalytics {
+  funnel: {
+    totalLeads: number;
+    replied: number;
+    warm: number;
+    qualified: number;
+    converted: number;
+    unsubscribed: number;
+  };
+  messages: {
+    totals: { sent: number; opened: number; replied: number; bounced: number };
+    byChannel: Array<{
+      channel: string;
+      sent: number;
+      opened: number;
+      replied: number;
+      bounced: number;
+    }>;
+  };
+  steps: Array<{ id: string; stepNumber: number; channel: string; isActive: boolean }>;
+}
+
+function CampaignAnalyticsPanel({ campaignId }: { campaignId: string }) {
+  const [data, setData] = useState<CampaignAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void api
+      .get<CampaignAnalytics>(`/campaigns/${campaignId}/analytics`)
+      .then((r) => {
+        if (!cancelled) setData(r);
+      })
+      .catch(() => {
+        if (!cancelled) setData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId]);
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-lg border border-border-default p-3 animate-pulse"
+            >
+              <div className="h-3 w-20 rounded bg-surface-muted/70" />
+              <div className="mt-2 h-6 w-12 rounded bg-surface-muted/70" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <EmptyState
+        compact
+        icon={BarChart3}
+        title="No analytics yet"
+        description="Once the campaign starts sending, funnel and message metrics will show up here."
+      />
+    );
+  }
+
+  const f = data.funnel;
+  const m = data.messages.totals;
+  const replyRate = m.sent > 0 ? ((m.replied / m.sent) * 100).toFixed(1) : '0.0';
+  const openRate = m.sent > 0 ? ((m.opened / m.sent) * 100).toFixed(1) : '0.0';
+  const bounceRate = m.sent > 0 ? ((m.bounced / m.sent) * 100).toFixed(1) : '0.0';
+  const convertRate =
+    f.totalLeads > 0 ? ((f.converted / f.totalLeads) * 100).toFixed(1) : '0.0';
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <div className="label mb-2">Funnel</div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <Stat label="Leads" value={f.totalLeads} />
+          <Stat label="Replied" value={f.replied} hint={`${replyRate}% reply rate`} />
+          <Stat label="Warm" value={f.warm} />
+          <Stat label="Qualified" value={f.qualified} />
+          <Stat
+            label="Converted"
+            value={f.converted}
+            hint={`${convertRate}% of leads`}
+            tone="positive"
+          />
+        </div>
+      </section>
+
+      <section>
+        <div className="label mb-2">Messages</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Stat label="Sent" value={m.sent} />
+          <Stat label="Opened" value={m.opened} hint={`${openRate}%`} />
+          <Stat label="Replied" value={m.replied} hint={`${replyRate}%`} tone="positive" />
+          <Stat
+            label="Bounced"
+            value={m.bounced}
+            hint={`${bounceRate}%`}
+            tone={m.bounced > 0 ? 'negative' : 'neutral'}
+          />
+        </div>
+      </section>
+
+      {data.messages.byChannel.length > 0 && (
+        <section>
+          <div className="label mb-2">By channel</div>
+          <div className="rounded-xl border border-border-default overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-muted/60 text-text-muted">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium">Channel</th>
+                  <th className="text-right px-3 py-2 font-medium">Sent</th>
+                  <th className="text-right px-3 py-2 font-medium">Opened</th>
+                  <th className="text-right px-3 py-2 font-medium">Replied</th>
+                  <th className="text-right px-3 py-2 font-medium">Bounced</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.messages.byChannel.map((row) => (
+                  <tr
+                    key={row.channel}
+                    className="border-t border-border-subtle text-text-primary"
+                  >
+                    <td className="px-3 py-2 capitalize">
+                      {row.channel.replace(/_/g, ' ')}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.sent}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.opened}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.replied}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{row.bounced}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {data.steps.length > 0 && (
+        <p className="text-xs text-text-muted">
+          Per-step breakdown isn't computed yet — messages aren't stamped with a cadence step
+          id. The Cadence tab shows the step list.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  hint,
+  tone = 'neutral',
+}: {
+  label: string;
+  value: number | string;
+  hint?: string;
+  tone?: 'neutral' | 'positive' | 'negative';
+}) {
+  const hintClass =
+    tone === 'positive'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : tone === 'negative'
+        ? 'text-red-600 dark:text-red-400'
+        : 'text-text-muted';
+  return (
+    <div className="rounded-lg border border-border-default p-3">
+      <div className="text-[11px] uppercase tracking-wider text-text-muted font-medium">
+        {label}
+      </div>
+      <div className="text-2xl font-semibold text-text-primary tabular-nums mt-1">
+        {value.toLocaleString()}
+      </div>
+      {hint && <div className={`text-xs mt-0.5 ${hintClass}`}>{hint}</div>}
     </div>
   );
 }

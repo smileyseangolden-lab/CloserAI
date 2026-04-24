@@ -99,8 +99,8 @@ export function OpportunitiesPage() {
 
   useEffect(() => {
     void api
-      .get<Opportunity[]>('/opportunities')
-      .then(setOpps)
+      .get<{ data: Opportunity[] }>('/opportunities?limit=500')
+      .then((r) => setOpps(r.data ?? []))
       .catch(() => setOpps([]));
   }, [refreshKey]);
 
