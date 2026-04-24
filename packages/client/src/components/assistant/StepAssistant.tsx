@@ -292,20 +292,20 @@ export function StepAssistant({
 
   return (
     <div className="flex flex-col h-full">
-      <header className="flex items-start justify-between px-8 py-5 border-b border-slate-200 bg-white">
+      <header className="flex items-start justify-between px-8 py-5 border-b border-border-default bg-surface">
         <div className="flex items-start gap-4">
           <div className="w-11 h-11 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
             <stage.icon size={22} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <div className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+              <div className="text-xs font-medium text-text-muted uppercase tracking-wide">
                 Stage {stage.order}
               </div>
               <StatusPill status={status} />
             </div>
-            <h1 className="text-xl font-semibold tracking-tight text-slate-900">{stage.title}</h1>
-            <p className="text-sm text-slate-500 mt-0.5">{stage.description}</p>
+            <h1 className="text-xl font-semibold tracking-tight text-text-primary">{stage.title}</h1>
+            <p className="text-sm text-text-muted mt-0.5">{stage.description}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -342,23 +342,23 @@ export function StepAssistant({
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] flex-1 min-h-0">
-        <section className="flex flex-col min-h-0 border-r border-slate-200 bg-slate-50">
+        <section className="flex flex-col min-h-0 border-r border-border-default bg-app">
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-6 space-y-4">
             {!loaded ? (
               <div className="space-y-3">
                 <div className="flex gap-3">
-                  <div className="h-8 w-8 rounded-full bg-slate-200/70 animate-pulse" />
+                  <div className="h-8 w-8 rounded-full bg-surface-muted/70 animate-pulse" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3 w-20 rounded bg-slate-200/70 animate-pulse" />
-                    <div className="h-3 w-3/4 rounded bg-slate-200/70 animate-pulse" />
-                    <div className="h-3 w-2/3 rounded bg-slate-200/70 animate-pulse" />
+                    <div className="h-3 w-20 rounded bg-surface-muted/70 animate-pulse" />
+                    <div className="h-3 w-3/4 rounded bg-surface-muted/70 animate-pulse" />
+                    <div className="h-3 w-2/3 rounded bg-surface-muted/70 animate-pulse" />
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <div className="h-8 w-8 rounded-full bg-slate-200/70 animate-pulse" />
+                  <div className="h-8 w-8 rounded-full bg-surface-muted/70 animate-pulse" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3 w-16 rounded bg-slate-200/70 animate-pulse" />
-                    <div className="h-3 w-5/6 rounded bg-slate-200/70 animate-pulse" />
+                    <div className="h-3 w-16 rounded bg-surface-muted/70 animate-pulse" />
+                    <div className="h-3 w-5/6 rounded bg-surface-muted/70 animate-pulse" />
                   </div>
                 </div>
               </div>
@@ -368,22 +368,22 @@ export function StepAssistant({
               messages.map((m) => <ChatBubble key={m.id} message={m} />)
             )}
             {busy && (
-              <div className="flex items-center gap-2 text-sm text-slate-400">
+              <div className="flex items-center gap-2 text-sm text-text-muted">
                 <Sparkles size={14} className="animate-pulse" /> Thinking...
               </div>
             )}
           </div>
 
-          <div className="border-t border-slate-200 bg-white px-8 py-4">
+          <div className="border-t border-border-default bg-surface px-8 py-4">
             {hasDraft && (
               <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                <span className="text-xs text-slate-400 flex items-center gap-1 mr-1">
+                <span className="text-xs text-text-muted flex items-center gap-1 mr-1">
                   <Wand2 size={12} /> Refine:
                 </span>
                 {REFINE_COMMANDS.map((r) => (
                   <button
                     key={r.label}
-                    className="text-xs px-2.5 py-1 rounded-full border border-slate-200 hover:bg-slate-50 text-slate-600"
+                    className="text-xs px-2.5 py-1 rounded-full border border-border-default hover:bg-app text-text-secondary"
                     disabled={busy}
                     onClick={() => void send(r.prompt)}
                   >
@@ -425,22 +425,22 @@ export function StepAssistant({
                 </button>
               </div>
             </div>
-            <div className="text-xs text-slate-400 mt-1">
+            <div className="text-xs text-text-muted mt-1">
               ⌘/Ctrl + Enter to send. Streaming tokens from the engine. This assistant has all
               previously approved stages in context.
             </div>
           </div>
         </section>
 
-        <section className="flex flex-col min-h-0 bg-white">
-          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <section className="flex flex-col min-h-0 bg-surface">
+          <div className="px-6 py-4 border-b border-border-default flex items-center justify-between">
             <div>
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              <div className="text-xs font-medium uppercase tracking-wide text-text-muted">
                 Live preview
               </div>
-              <div className="text-sm text-slate-600">
+              <div className="text-sm text-text-secondary">
                 {hasDraft ? `${Object.keys(draft).length} fields populated` : 'Nothing proposed yet'}
-                {version > 0 && <span className="text-slate-400"> · v{version}</span>}
+                {version > 0 && <span className="text-text-muted"> · v{version}</span>}
               </div>
             </div>
           </div>
@@ -459,7 +459,7 @@ export function StepAssistant({
               onChange={setDraft}
             />
             {sidePanel && (
-              <div className="pt-4 border-t border-slate-200">{sidePanel}</div>
+              <div className="pt-4 border-t border-border-default">{sidePanel}</div>
             )}
           </div>
         </section>
@@ -485,8 +485,8 @@ function OpeningCard({ stage }: { stage: StageDefinition }) {
         <Sparkles size={14} />
         Your {stage.title} assistant
       </div>
-      <p className="text-slate-800 text-base leading-relaxed">“{stage.openingPrompt}”</p>
-      <p className="text-sm text-slate-500 mt-3">
+      <p className="text-text-primary text-base leading-relaxed">“{stage.openingPrompt}”</p>
+      <p className="text-sm text-text-muted mt-3">
         You never fill out a blank form here. Describe things in plain language and I’ll draft the
         structured output on the right. Edit anything inline and I’ll incorporate it.
       </p>
@@ -500,7 +500,7 @@ function ChatBubble({ message }: { message: AssistantMessage }) {
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
       <div
         className={`w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center ${
-          isUser ? 'bg-slate-700 text-white' : 'bg-brand-100 text-brand-700'
+          isUser ? 'bg-slate-700 dark:bg-slate-600 text-white' : 'bg-brand-100 text-brand-700'
         }`}
       >
         {isUser ? <User size={14} /> : <Bot size={14} />}
@@ -508,7 +508,7 @@ function ChatBubble({ message }: { message: AssistantMessage }) {
       <div className={`max-w-[85%] ${isUser ? 'text-right' : ''}`}>
         <div
           className={`inline-block text-sm leading-relaxed rounded-2xl px-4 py-2.5 whitespace-pre-wrap ${
-            isUser ? 'bg-slate-700 text-white' : 'bg-white border border-slate-200 text-slate-800'
+            isUser ? 'bg-slate-700 dark:bg-slate-600 text-white' : 'bg-surface border border-border-default text-text-primary'
           }`}
         >
           {message.content}
@@ -525,7 +525,7 @@ function ChatBubble({ message }: { message: AssistantMessage }) {
 
 function StatusPill({ status }: { status: 'locked' | 'in_progress' | 'approved' }) {
   const styles: Record<typeof status, string> = {
-    locked: 'bg-slate-100 text-slate-500',
+    locked: 'bg-surface-muted text-text-muted',
     in_progress: 'bg-amber-100 text-amber-700',
     approved: 'bg-emerald-100 text-emerald-700',
   };
@@ -626,11 +626,11 @@ function DraftExtras({
   const extras = Object.entries(draft).filter(([k]) => !knownKeys.has(k));
   if (extras.length === 0) return null;
   return (
-    <div className="pt-4 border-t border-dashed border-slate-200">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-400 mb-2">
+    <div className="pt-4 border-t border-dashed border-border-default">
+      <div className="text-xs font-medium uppercase tracking-wide text-text-muted mb-2">
         Additional assistant output
       </div>
-      <pre className="text-xs bg-slate-50 rounded-lg p-3 overflow-auto max-h-64">
+      <pre className="text-xs bg-app rounded-lg p-3 overflow-auto max-h-64">
         {JSON.stringify(Object.fromEntries(extras), null, 2)}
       </pre>
       <button

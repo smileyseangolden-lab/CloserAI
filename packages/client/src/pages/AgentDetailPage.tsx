@@ -65,16 +65,16 @@ export function AgentDetailPage() {
           <h2 className="font-semibold mb-3">Personality</h2>
           <dl className="space-y-2 text-sm">
             <div>
-              <dt className="text-slate-500">Type</dt>
+              <dt className="text-text-muted">Type</dt>
               <dd className="font-medium capitalize">{agent.agentType}</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Style</dt>
+              <dt className="text-text-muted">Style</dt>
               <dd className="font-medium capitalize">{agent.personalityStyle}</dd>
             </div>
             {agent.toneDescription && (
               <div>
-                <dt className="text-slate-500">Tone</dt>
+                <dt className="text-text-muted">Tone</dt>
                 <dd>{agent.toneDescription}</dd>
               </div>
             )}
@@ -85,16 +85,16 @@ export function AgentDetailPage() {
           <h2 className="font-semibold mb-3">Knowledge base ({agent.knowledge.length})</h2>
           <div className="space-y-3">
             {agent.knowledge.map((k) => (
-              <div key={k.id} className="border border-slate-100 rounded-lg p-3">
-                <div className="text-xs text-slate-500 uppercase tracking-wide">
+              <div key={k.id} className="border border-border-subtle rounded-lg p-3">
+                <div className="text-xs text-text-muted uppercase tracking-wide">
                   {k.knowledgeType.replace(/_/g, ' ')}
                 </div>
                 <div className="font-medium text-sm">{k.title}</div>
-                <div className="text-sm text-slate-600 mt-1">{k.content}</div>
+                <div className="text-sm text-text-secondary mt-1">{k.content}</div>
               </div>
             ))}
             {agent.knowledge.length === 0 && (
-              <div className="text-sm text-slate-400">No knowledge entries yet.</div>
+              <div className="text-sm text-text-muted">No knowledge entries yet.</div>
             )}
           </div>
         </div>
@@ -112,7 +112,7 @@ export function AgentDetailPage() {
           {generating ? 'Generating...' : 'Generate sample'}
         </button>
         {draft && (
-          <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+          <div className="mt-4 p-4 bg-surface-muted rounded-lg border border-border-default">
             {draft.subject && (
               <div className="font-medium mb-2">Subject: {draft.subject}</div>
             )}

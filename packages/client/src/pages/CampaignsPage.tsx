@@ -16,12 +16,12 @@ interface Campaign {
 }
 
 const statusColors: Record<string, string> = {
-  draft: 'bg-slate-100 text-slate-600',
-  scheduled: 'bg-blue-100 text-blue-700',
-  active: 'bg-emerald-100 text-emerald-700',
-  paused: 'bg-amber-100 text-amber-700',
-  completed: 'bg-slate-100 text-slate-500',
-  archived: 'bg-slate-100 text-slate-400',
+  draft: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  scheduled: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+  active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+  paused: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  completed: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+  archived: 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500',
 };
 
 export function CampaignsPage() {
@@ -36,7 +36,7 @@ export function CampaignsPage() {
   }, []);
 
   return (
-    <div className="p-8 max-w-7xl">
+    <div className="p-4 md:p-8 max-w-7xl">
       <PageHeader
         title="Campaigns"
         subtitle="Orchestrate outbound and nurture cadences"
@@ -77,8 +77,8 @@ export function CampaignsPage() {
             >
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <div className="font-semibold text-slate-900">{c.name}</div>
-                  <div className="text-xs text-slate-500 mt-0.5 capitalize">
+                  <div className="font-semibold text-text-primary">{c.name}</div>
+                  <div className="text-xs text-text-muted mt-0.5 capitalize">
                     {c.campaignType.replace(/_/g, ' ')} • {c.strategy}
                   </div>
                 </div>
@@ -86,7 +86,7 @@ export function CampaignsPage() {
                   {c.status}
                 </span>
               </div>
-              {c.description && <p className="text-sm text-slate-600">{c.description}</p>}
+              {c.description && <p className="text-sm text-text-secondary">{c.description}</p>}
             </Link>
           ))}
         </div>

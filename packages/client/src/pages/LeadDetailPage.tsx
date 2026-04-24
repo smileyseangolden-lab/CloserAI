@@ -68,22 +68,22 @@ export function LeadDetailPage() {
               {lead.contacts.map((c) => (
                 <div
                   key={c.id}
-                  className="flex items-center justify-between p-3 rounded-lg border border-slate-100"
+                  className="flex items-center justify-between p-3 rounded-lg border border-border-subtle"
                 >
                   <div>
                     <div className="font-medium">
                       {c.firstName} {c.lastName}
                     </div>
-                    <div className="text-sm text-slate-500">
+                    <div className="text-sm text-text-muted">
                       {c.jobTitle ?? '—'}
                       {c.seniorityLevel && ` • ${c.seniorityLevel}`}
                     </div>
                   </div>
-                  <div className="text-sm text-slate-600">{c.email}</div>
+                  <div className="text-sm text-text-secondary">{c.email}</div>
                 </div>
               ))}
               {lead.contacts.length === 0 && (
-                <div className="text-sm text-slate-400">No contacts yet.</div>
+                <div className="text-sm text-text-muted">No contacts yet.</div>
               )}
             </div>
           </div>
@@ -92,15 +92,15 @@ export function LeadDetailPage() {
             <h2 className="font-semibold mb-4">Activity timeline</h2>
             <div className="space-y-3">
               {activities.length === 0 && (
-                <div className="text-sm text-slate-400">No activity yet.</div>
+                <div className="text-sm text-text-muted">No activity yet.</div>
               )}
               {activities.map((a) => (
                 <div key={a.id} className="flex gap-3 text-sm">
                   <div className="w-2 h-2 mt-2 rounded-full bg-brand-500" />
                   <div className="flex-1">
                     <div className="font-medium">{a.activityType}</div>
-                    <div className="text-slate-500">{a.description}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">
+                    <div className="text-text-muted">{a.description}</div>
+                    <div className="text-xs text-text-muted mt-0.5">
                       {new Date(a.createdAt).toLocaleString()}
                     </div>
                   </div>
@@ -114,14 +114,14 @@ export function LeadDetailPage() {
           <div className="card p-6">
             <h2 className="font-semibold mb-2">Lead score</h2>
             <div className="text-5xl font-semibold text-brand-600">{lead.leadScore}</div>
-            <div className="text-xs text-slate-500 mb-4">out of 100</div>
+            <div className="text-xs text-text-muted mb-4">out of 100</div>
             {lead.leadScoreBreakdown && (
               <div className="space-y-2 text-sm">
                 {Object.entries(lead.leadScoreBreakdown)
                   .filter(([k]) => k !== 'total')
                   .map(([k, v]) => (
                     <div key={k} className="flex justify-between">
-                      <span className="text-slate-600 capitalize">{k}</span>
+                      <span className="text-text-secondary capitalize">{k}</span>
                       <span className="font-medium">{v}</span>
                     </div>
                   ))}
@@ -133,15 +133,15 @@ export function LeadDetailPage() {
             <h2 className="font-semibold mb-2">Details</h2>
             <dl className="space-y-2 text-sm">
               <div>
-                <dt className="text-slate-500">Website</dt>
+                <dt className="text-text-muted">Website</dt>
                 <dd>{lead.companyWebsite ?? '—'}</dd>
               </div>
               <div>
-                <dt className="text-slate-500">Size</dt>
+                <dt className="text-text-muted">Size</dt>
                 <dd>{lead.companySize ?? '—'}</dd>
               </div>
               <div>
-                <dt className="text-slate-500">Status</dt>
+                <dt className="text-text-muted">Status</dt>
                 <dd>{lead.status}</dd>
               </div>
             </dl>

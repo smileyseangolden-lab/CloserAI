@@ -106,7 +106,7 @@ export function IntegrationsPage() {
           <nav className="w-56 flex-shrink-0 space-y-6">
             {CATEGORY_ORDER.filter((c) => grouped[c]?.length).map((cat) => (
               <div key={cat}>
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2 px-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-text-muted mb-2 px-3">
                   {CATEGORY_LABELS[cat]}
                 </div>
                 <div className="space-y-1">
@@ -119,7 +119,7 @@ export function IntegrationsPage() {
                         className={`w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm font-medium ${
                           activeKey === def.key
                             ? 'bg-brand-50 text-brand-700'
-                            : 'text-slate-600 hover:bg-slate-50'
+                            : 'text-text-secondary hover:bg-surface-muted'
                         }`}
                       >
                         <span className="truncate">{def.name}</span>
@@ -246,9 +246,9 @@ function ProviderCard({ definition, settings, onSaved, onReset }: ProviderCardPr
     <div className="card p-6">
       <div className="flex items-start justify-between gap-4 mb-1">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">{definition.name}</h2>
+          <h2 className="text-lg font-semibold text-text-primary">{definition.name}</h2>
           {definition.vendor && (
-            <div className="text-xs text-slate-500">{definition.vendor}</div>
+            <div className="text-xs text-text-muted">{definition.vendor}</div>
           )}
         </div>
         <div className="flex gap-2">
@@ -269,7 +269,7 @@ function ProviderCard({ definition, settings, onSaved, onReset }: ProviderCardPr
           )}
         </div>
       </div>
-      <p className="text-sm text-slate-600 mb-6">{definition.description}</p>
+      <p className="text-sm text-text-secondary mb-6">{definition.description}</p>
 
       <div className="space-y-5">
         {definition.fields.map((field) => (
@@ -287,7 +287,7 @@ function ProviderCard({ definition, settings, onSaved, onReset }: ProviderCardPr
         ))}
       </div>
 
-      <div className="mt-6 flex items-center gap-2 border-t border-slate-200 pt-4">
+      <div className="mt-6 flex items-center gap-2 border-t border-border-default pt-4">
         <button className="btn-primary" onClick={onSave} disabled={saving}>
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           Save
@@ -326,7 +326,7 @@ function FieldRow({ field, value, source, revealed, onToggleReveal, onChange }: 
   const sourceLabel: Record<NonNullable<FieldRowProps['source']>, { text: string; cls: string }> = {
     org: { text: 'org override', cls: 'bg-brand-50 text-brand-700' },
     env: { text: 'from env', cls: 'bg-amber-50 text-amber-700' },
-    default: { text: 'default', cls: 'bg-slate-100 text-slate-600' },
+    default: { text: 'default', cls: 'bg-surface-muted text-text-secondary' },
     missing: { text: 'unset', cls: 'bg-red-50 text-red-700' },
   };
   const badge = source ? sourceLabel[source] : null;
@@ -339,11 +339,11 @@ function FieldRow({ field, value, source, revealed, onToggleReveal, onChange }: 
         {field.required && <span className="text-xs text-red-500">required</span>}
         {badge && <span className={`badge ${badge.cls}`}>{badge.text}</span>}
         {field.envFallback && (
-          <span className="text-[10px] text-slate-400 font-mono">{field.envFallback}</span>
+          <span className="text-[10px] text-text-muted font-mono">{field.envFallback}</span>
         )}
       </div>
       {field.description && (
-        <p className="text-xs text-slate-500 mb-1.5">{field.description}</p>
+        <p className="text-xs text-text-muted mb-1.5">{field.description}</p>
       )}
 
       {field.type === 'select' ? (
@@ -378,7 +378,7 @@ function FieldRow({ field, value, source, revealed, onToggleReveal, onChange }: 
           <button
             type="button"
             onClick={onToggleReveal}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary"
             aria-label={revealed ? 'Hide' : 'Show'}
           >
             {revealed ? <EyeOff size={14} /> : <Eye size={14} />}

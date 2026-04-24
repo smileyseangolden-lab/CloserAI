@@ -20,3 +20,7 @@ export { Input, Textarea } from './Input';
 export { Toaster, toast } from './Toast';
 export { PageHeader } from './PageHeader';
 export { StatCard } from './StatCard';
+export { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from './Sheet';
+export { ThemeToggle } from './ThemeToggle';
+export { CommandPalette, useCommandPalette } from './CommandPalette';
+export { Field, FieldLabel, FieldHint, FieldError, FormError, FormRow } from './Form';

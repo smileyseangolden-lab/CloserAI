@@ -65,7 +65,7 @@ export function AnalyticsPage() {
         <h2 className="font-semibold mb-4">Campaign performance</h2>
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-xs uppercase text-slate-500 border-b border-slate-200">
+            <tr className="text-xs uppercase text-text-muted border-b border-border-default">
               <th className="text-left py-2">Campaign</th>
               <th className="text-right py-2">Leads</th>
               <th className="text-right py-2">Replied</th>
@@ -76,7 +76,7 @@ export function AnalyticsPage() {
           </thead>
           <tbody>
             {campaigns.map((c) => (
-              <tr key={c.campaignId} className="border-b border-slate-100">
+              <tr key={c.campaignId} className="border-b border-border-subtle">
                 <td className="py-3 font-medium">{c.name}</td>
                 <td className="text-right">{c.totalLeads}</td>
                 <td className="text-right">{c.replied}</td>
@@ -87,7 +87,7 @@ export function AnalyticsPage() {
             ))}
             {campaigns.length === 0 && (
               <tr>
-                <td colSpan={6} className="text-center text-slate-400 py-8">
+                <td colSpan={6} className="text-center text-text-muted py-8">
                   No campaigns yet
                 </td>
               </tr>

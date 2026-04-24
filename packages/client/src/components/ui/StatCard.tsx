@@ -13,16 +13,16 @@ export function StatCard({ label, value, change, icon: Icon, tone = 'neutral' }:
     <div className="card p-5">
       <div className="flex items-start justify-between">
         <div>
-          <div className="text-xs uppercase tracking-wide text-slate-500 font-medium">{label}</div>
-          <div className="text-3xl font-semibold mt-2">{value}</div>
+          <div className="text-xs uppercase tracking-wide text-text-muted font-medium">{label}</div>
+          <div className="text-3xl font-semibold mt-2 text-text-primary">{value}</div>
           {change && (
             <div
               className={`text-xs mt-2 ${
                 tone === 'positive'
-                  ? 'text-emerald-600'
+                  ? 'text-emerald-600 dark:text-emerald-400'
                   : tone === 'negative'
-                    ? 'text-red-600'
-                    : 'text-slate-500'
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-text-muted'
               }`}
             >
               {change}
@@ -30,7 +30,7 @@ export function StatCard({ label, value, change, icon: Icon, tone = 'neutral' }:
           )}
         </div>
         {Icon && (
-          <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center dark:bg-brand-500/15 dark:text-brand-300">
             <Icon size={18} />
           </div>
         )}

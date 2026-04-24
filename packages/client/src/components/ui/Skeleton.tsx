@@ -5,7 +5,7 @@ export function Skeleton({ className, ...props }: HTMLAttributes<HTMLDivElement>
   return (
     <div
       className={cn(
-        'animate-pulse rounded-md bg-slate-200/70',
+        'animate-pulse rounded-md bg-slate-200/70 dark:bg-slate-700/60',
         className,
       )}
       {...props}
@@ -44,7 +44,7 @@ export function SkeletonCard({ className }: { className?: string }) {
 
 export function SkeletonRow({ cols = 4 }: { cols?: number }) {
   return (
-    <tr className="border-t border-slate-100">
+    <tr className="border-t border-border-subtle">
       {Array.from({ length: cols }).map((_, i) => (
         <td key={i} className="px-4 py-3">
           <Skeleton className="h-3 w-full max-w-[140px]" />

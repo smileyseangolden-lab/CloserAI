@@ -65,17 +65,17 @@ export function CampaignDetailPage() {
           {campaign.steps.map((step) => (
             <div
               key={step.id}
-              className="border border-slate-200 rounded-xl p-4 flex gap-4"
+              className="border border-border-default rounded-xl p-4 flex gap-4"
             >
               <div className="flex-shrink-0 w-10 h-10 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center font-semibold">
                 {step.stepNumber}
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="badge bg-slate-100 text-slate-700 capitalize">
+                  <span className="badge bg-surface-muted text-text-primary capitalize">
                     {step.channel.replace(/_/g, ' ')}
                   </span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-text-muted">
                     Wait {step.delayDays}d {step.delayHours}h
                   </span>
                   {step.aiPersonalizationEnabled && (
@@ -85,14 +85,14 @@ export function CampaignDetailPage() {
                 {step.subjectTemplate && (
                   <div className="text-sm font-medium mb-1">Subject: {step.subjectTemplate}</div>
                 )}
-                <div className="text-sm text-slate-600 whitespace-pre-wrap">
+                <div className="text-sm text-text-secondary whitespace-pre-wrap">
                   {step.bodyTemplate}
                 </div>
               </div>
             </div>
           ))}
           {campaign.steps.length === 0 && (
-            <div className="text-sm text-slate-400">No cadence steps yet.</div>
+            <div className="text-sm text-text-muted">No cadence steps yet.</div>
           )}
         </div>
       </div>

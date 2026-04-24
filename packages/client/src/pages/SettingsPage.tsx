@@ -24,7 +24,7 @@ export function SettingsPage() {
               end={item.end}
               className={({ isActive }) =>
                 `block px-3 py-2 rounded-lg text-sm font-medium ${
-                  isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50'
+                  isActive ? 'bg-brand-50 text-brand-700' : 'text-text-secondary hover:bg-surface-muted'
                 }`
               }
             >
@@ -73,17 +73,17 @@ function OrganizationSettings() {
 }
 
 function BusinessProfileSettings() {
-  return <div className="text-sm text-slate-500">Business profile config.</div>;
+  return <div className="text-sm text-text-muted">Business profile config.</div>;
 }
 
 function IcpsSettings() {
-  return <div className="text-sm text-slate-500">ICP management.</div>;
+  return <div className="text-sm text-text-muted">ICP management.</div>;
 }
 
 function TeamSettings() {
-  return <div className="text-sm text-slate-500">Team & invitations.</div>;
+  return <div className="text-sm text-text-muted">Team & invitations.</div>;
 }
 
 function EmailSettings() {
-  return <div className="text-sm text-slate-500">Email domains, accounts, warmup.</div>;
+  return <div className="text-sm text-text-muted">Email domains, accounts, warmup.</div>;
 }

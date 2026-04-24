@@ -3,16 +3,48 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --color-app: 248 250 252;            /* slate-50 */
+    --color-surface: 255 255 255;
+    --color-surface-muted: 241 245 249;  /* slate-100 */
+    --color-surface-elevated: 255 255 255;
+    --color-border: 226 232 240;         /* slate-200 */
+    --color-border-subtle: 241 245 249;  /* slate-100 */
+    --color-text-primary: 15 23 42;      /* slate-900 */
+    --color-text-secondary: 71 85 105;   /* slate-600 */
+    --color-text-muted: 100 116 139;     /* slate-500 */
+
+    color-scheme: light;
+  }
+
+  .dark {
+    --color-app: 2 6 23;                 /* slate-950 */
+    --color-surface: 15 23 42;           /* slate-900 */
+    --color-surface-muted: 30 41 59;     /* slate-800 */
+    --color-surface-elevated: 30 41 59;  /* slate-800 */
+    --color-border: 30 41 59;            /* slate-800 */
+    --color-border-subtle: 30 41 59;     /* slate-800 */
+    --color-text-primary: 241 245 249;   /* slate-100 */
+    --color-text-secondary: 203 213 225; /* slate-300 */
+    --color-text-muted: 148 163 184;     /* slate-400 */
+
+    color-scheme: dark;
+  }
+
   html,
   body,
   #root {
     @apply h-full;
   }
+
+  body {
+    @apply bg-app text-text-primary;
+  }
 }
 
 @layer components {
   .card {
-    @apply bg-white border border-slate-200 rounded-xl shadow-sm;
+    @apply bg-surface border border-border-default rounded-xl shadow-sm;
   }
 
   .btn {
@@ -24,19 +56,19 @@
   }
 
   .btn-secondary {
-    @apply btn bg-white border border-slate-200 text-slate-700 hover:bg-slate-50;
+    @apply btn bg-surface border border-border-default text-text-primary hover:bg-surface-muted;
   }
 
   .btn-ghost {
-    @apply btn text-slate-600 hover:bg-slate-100;
+    @apply btn text-text-secondary hover:bg-surface-muted hover:text-text-primary;
   }
 
   .input {
-    @apply w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/40;
+    @apply w-full rounded-lg border border-border-default bg-surface text-text-primary px-3 py-2 text-sm placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-400;
   }
 
   .label {
-    @apply block text-xs font-medium uppercase tracking-wide text-slate-500 mb-1;
+    @apply block text-xs font-medium uppercase tracking-wide text-text-muted mb-1;
   }
 
   .badge {

@@ -149,7 +149,7 @@ export function DashboardPage() {
         <div className="card p-5 lg:col-span-2">
           <div className="flex items-start justify-between mb-3">
             <div>
-              <div className="text-xs uppercase tracking-wide text-slate-500 font-medium">
+              <div className="text-xs uppercase tracking-wide text-text-muted font-medium">
                 Setup progress
               </div>
               <div className="text-2xl font-semibold mt-1">
@@ -162,7 +162,7 @@ export function DashboardPage() {
               </Link>
             )}
           </div>
-          <div className="flex gap-1 overflow-hidden rounded-full h-2 bg-slate-100 mb-3">
+          <div className="flex gap-1 overflow-hidden rounded-full h-2 bg-surface-muted mb-3">
             {stagesData?.stages.map((s) => (
               <div
                 key={s.id}
@@ -182,10 +182,10 @@ export function DashboardPage() {
               <Link
                 key={s.id}
                 to={`/stages/${s.id}`}
-                className="text-xs px-2 py-1 rounded-full border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1"
+                className="text-xs px-2 py-1 rounded-full border border-border-default hover:bg-surface-muted inline-flex items-center gap-1"
               >
                 <StageDot status={s.status} />
-                <span className="text-slate-500">{s.order}.</span>
+                <span className="text-text-muted">{s.order}.</span>
                 {s.title}
               </Link>
             ))}
@@ -218,7 +218,7 @@ export function DashboardPage() {
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="font-semibold text-lg">Performance by stage × agent</h2>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-text-muted">
               How each AI agent is performing across the workflow stages where activity is observed.
             </p>
           </div>
@@ -227,7 +227,7 @@ export function DashboardPage() {
         {stagesData === null ? (
           <LoadingBlock label="Loading agent performance…" />
         ) : stagesData.agents.length === 0 ? (
-          <div className="text-sm text-slate-500 py-10 text-center">
+          <div className="text-sm text-text-muted py-10 text-center">
             No agents configured yet.{' '}
             <Link to="/stages/agent-builder" className="text-brand-600 font-medium">
               Build your first agent →
@@ -245,23 +245,23 @@ export function DashboardPage() {
             <Link
               key={s.id}
               to={`/stages/${s.id}`}
-              className="border border-slate-200 rounded-xl p-4 hover:border-brand-300 hover:bg-brand-50/40 transition"
+              className="border border-border-default rounded-xl p-4 hover:border-brand-300 hover:bg-brand-50/40 transition"
             >
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-surface-muted text-text-secondary flex items-center justify-center flex-shrink-0">
                   <StageIcon stageId={s.id} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <div className="text-xs font-medium text-slate-400">
+                    <div className="text-xs font-medium text-text-muted">
                       Stage {s.order}
                     </div>
                     <StagePill status={s.status} />
                   </div>
-                  <div className="font-medium text-slate-900 truncate">{s.title}</div>
-                  <div className="text-xs text-slate-500 line-clamp-2 mt-0.5">{s.description}</div>
+                  <div className="font-medium text-text-primary truncate">{s.title}</div>
+                  <div className="text-xs text-text-muted line-clamp-2 mt-0.5">{s.description}</div>
                   {s.hasAgentMetrics && (
-                    <div className="text-xs mt-2 text-slate-500">
+                    <div className="text-xs mt-2 text-text-muted">
                       {summariseAgents(s.perAgent)}
                     </div>
                   )}
@@ -282,13 +282,13 @@ function StageAgentGrid({ data }: { data: StagesAnalytics }) {
       <table className="w-full text-sm border-separate border-spacing-0">
         <thead>
           <tr>
-            <th className="text-left sticky left-0 bg-white z-10 pb-3 pr-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <th className="text-left sticky left-0 bg-surface z-10 pb-3 pr-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
               Agent
             </th>
             {metricStages.map((s) => (
               <th
                 key={s.id}
-                className="text-left pb-3 pr-3 text-xs font-semibold uppercase tracking-wide text-slate-500 min-w-[140px]"
+                className="text-left pb-3 pr-3 text-xs font-semibold uppercase tracking-wide text-text-muted min-w-[140px]"
               >
                 <div className="flex items-center gap-1.5">
                   <StageDot status={s.status} />
@@ -300,16 +300,16 @@ function StageAgentGrid({ data }: { data: StagesAnalytics }) {
         </thead>
         <tbody>
           {data.agents.map((agent) => (
-            <tr key={agent.id} className="border-t border-slate-100">
-              <td className="sticky left-0 bg-white z-10 py-3 pr-3">
-                <div className="font-medium text-slate-900">{agent.name}</div>
-                <div className="text-xs text-slate-500 capitalize">
+            <tr key={agent.id} className="border-t border-border-subtle">
+              <td className="sticky left-0 bg-surface z-10 py-3 pr-3">
+                <div className="font-medium text-text-primary">{agent.name}</div>
+                <div className="text-xs text-text-muted capitalize">
                   {agent.agentType} · {agent.isActive ? 'Active' : 'Paused'}
                 </div>
               </td>
               {metricStages.map((stage) => {
                 const a = stage.perAgent.find((r) => r.agentId === agent.id);
-                if (!a) return <td key={stage.id} className="py-3 pr-3 text-slate-300">—</td>;
+                if (!a) return <td key={stage.id} className="py-3 pr-3 text-text-muted">—</td>;
                 return (
                   <td key={stage.id} className="py-3 pr-3 align-top">
                     <StageAgentCell stageId={stage.id} row={a} />
@@ -326,12 +326,12 @@ function StageAgentGrid({ data }: { data: StagesAnalytics }) {
 
 function StageAgentCell({ stageId, row }: { stageId: string; row: AgentRow }) {
   if (stageId === 'deployment' || stageId === 'pilot') {
-    if (row.sent === 0) return <span className="text-slate-300">No sends yet</span>;
+    if (row.sent === 0) return <span className="text-text-muted">No sends yet</span>;
     return (
       <div>
         <MetricBar label="Reply" value={row.replyRate} />
         <MetricBar label="Open" value={row.openRate} />
-        <div className="text-xs text-slate-500 mt-1">
+        <div className="text-xs text-text-muted mt-1">
           {row.sent.toLocaleString()} sent · {row.replied} replied
           {row.bounced > 0 && ` · ${row.bounced} bounced`}
         </div>
@@ -341,10 +341,10 @@ function StageAgentCell({ stageId, row }: { stageId: string; row: AgentRow }) {
   if (stageId === 'handoff' || stageId === 'optimization') {
     return (
       <div>
-        <div className="text-base font-semibold text-slate-800">
+        <div className="text-base font-semibold text-text-primary">
           ${Number(row.wonValue).toLocaleString()}
         </div>
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-text-muted">
           {row.wonOpps} won · {row.openOpps} open
         </div>
       </div>
@@ -353,14 +353,14 @@ function StageAgentCell({ stageId, row }: { stageId: string; row: AgentRow }) {
   if (stageId === 'agent-builder') {
     return (
       <div>
-        <div className="text-xs text-slate-500">
+        <div className="text-xs text-text-muted">
           {row.isActive ? (
             <span className="text-emerald-600 font-medium">Active</span>
           ) : (
-            <span className="text-slate-400">Paused</span>
+            <span className="text-text-muted">Paused</span>
           )}
         </div>
-        <div className="text-xs text-slate-500">{row.sent} msgs lifetime</div>
+        <div className="text-xs text-text-muted">{row.sent} msgs lifetime</div>
       </div>
     );
   }
@@ -368,23 +368,23 @@ function StageAgentCell({ stageId, row }: { stageId: string; row: AgentRow }) {
     const replyPct = (row.replyRate * 100).toFixed(1);
     return (
       <div>
-        <div className="text-sm font-semibold text-slate-800">{replyPct}%</div>
-        <div className="text-xs text-slate-500">reply rate</div>
+        <div className="text-sm font-semibold text-text-primary">{replyPct}%</div>
+        <div className="text-xs text-text-muted">reply rate</div>
       </div>
     );
   }
-  return <span className="text-slate-300">—</span>;
+  return <span className="text-text-muted">—</span>;
 }
 
 function MetricBar({ label, value }: { label: string; value: number }) {
   const pct = Math.min(100, Math.max(0, value * 100));
   return (
     <div className="mb-1">
-      <div className="flex justify-between text-[10px] text-slate-500 mb-0.5">
+      <div className="flex justify-between text-[10px] text-text-muted mb-0.5">
         <span>{label}</span>
         <span>{pct.toFixed(1)}%</span>
       </div>
-      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
         <div className="h-full bg-brand-500 rounded-full" style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -408,9 +408,9 @@ function MiniStat({
         <Icon size={18} />
       </div>
       <div className="min-w-0">
-        <div className="text-xs uppercase tracking-wide text-slate-500 font-medium">{label}</div>
+        <div className="text-xs uppercase tracking-wide text-text-muted font-medium">{label}</div>
         <div className="text-xl font-semibold truncate">{value}</div>
-        <div className="text-xs text-slate-500 truncate">{hint}</div>
+        <div className="text-xs text-text-muted truncate">{hint}</div>
       </div>
     </div>
   );
@@ -428,7 +428,7 @@ function StageDot({ status }: { status: StageRow['status'] }) {
 
 function StagePill({ status }: { status: StageRow['status'] }) {
   const styles: Record<StageRow['status'], string> = {
-    locked: 'bg-slate-100 text-slate-500',
+    locked: 'bg-surface-muted text-text-muted',
     in_progress: 'bg-amber-100 text-amber-700',
     approved: 'bg-emerald-100 text-emerald-700',
   };
@@ -491,7 +491,7 @@ function AnomalyBanner({ anomaly, onDismiss }: { anomaly: Anomaly; onDismiss: ()
       </div>
       <button
         onClick={onDismiss}
-        className="text-xs text-slate-500 hover:text-slate-800 p-1"
+        className="text-xs text-text-muted hover:text-text-primary p-1"
         aria-label="Dismiss"
       >
         ×

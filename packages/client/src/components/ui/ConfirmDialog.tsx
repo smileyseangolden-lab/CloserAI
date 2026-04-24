@@ -112,7 +112,7 @@ export function PromptDialog({
         </DialogHeader>
         <DialogBody>
           {label ? (
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-text-muted">
               {label}
             </label>
           ) : null}

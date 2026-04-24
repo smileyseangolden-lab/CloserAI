@@ -20,7 +20,7 @@ export const DialogOverlay = forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm',
+      'fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm dark:bg-black/60',
       'data-[state=open]:animate-in data-[state=open]:fade-in-0',
       'data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
       className,
@@ -40,7 +40,7 @@ export const DialogContent = forwardRef<
       ref={ref}
       className={cn(
         'fixed left-1/2 top-1/2 z-50 w-[min(92vw,32rem)] -translate-x-1/2 -translate-y-1/2',
-        'rounded-xl border border-slate-200 bg-white shadow-xl focus:outline-none',
+        'rounded-xl border border-border-default bg-surface-elevated text-text-primary shadow-xl focus:outline-none',
         'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
         'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
         className,
@@ -49,7 +49,7 @@ export const DialogContent = forwardRef<
     >
       {children}
       <DialogPrimitive.Close
-        className="absolute right-3 top-3 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+        className="absolute right-3 top-3 rounded-md p-1 text-text-muted hover:bg-surface-muted hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
         aria-label="Close"
       >
         <X className="h-4 w-4" />
@@ -66,13 +66,16 @@ export function DialogHeader({ className, ...props }: HTMLAttributes<HTMLDivElem
 }
 
 export function DialogBody({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('px-5 pb-4 text-sm text-slate-600', className)} {...props} />;
+  return <div className={cn('px-5 pb-4 text-sm text-text-secondary', className)} {...props} />;
 }
 
 export function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('flex justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3 rounded-b-xl', className)}
+      className={cn(
+        'flex justify-end gap-2 border-t border-border-default bg-surface-muted/60 px-5 py-3 rounded-b-xl',
+        className,
+      )}
       {...props}
     />
   );
@@ -84,7 +87,7 @@ export const DialogTitle = forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('text-base font-semibold text-slate-900', className)}
+    className={cn('text-base font-semibold text-text-primary', className)}
     {...props}
   />
 ));
@@ -96,7 +99,7 @@ export const DialogDescription = forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn('text-sm text-slate-500', className)}
+    className={cn('text-sm text-text-muted', className)}
     {...props}
   />
 ));
