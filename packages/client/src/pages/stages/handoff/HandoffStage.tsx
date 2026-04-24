@@ -3,6 +3,7 @@ import { FileText, UserCog, Wand2, Trash2 } from 'lucide-react';
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
+import { ConfirmDialog, toast } from '../../../components/ui';
 
 interface RuleRow {
   id: string;
@@ -36,6 +37,8 @@ export function HandoffStage() {
   const [packetLeadId, setPacketLeadId] = useState('');
   const [packet, setPacket] = useState<string | null>(null);
   const [packetBusy, setPacketBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<RuleRow | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   useEffect(() => {
     void Promise.all([
@@ -75,10 +78,19 @@ export function HandoffStage() {
     setRefreshKey((k) => k + 1);
   }
 
-  async function removeRule(id: string) {
-    if (!confirm('Delete this handoff rule?')) return;
-    await api.delete(`/handoff/rules/${id}`);
-    setRefreshKey((k) => k + 1);
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    try {
+      await api.delete(`/handoff/rules/${deleteTarget.id}`);
+      toast.success('Rule deleted');
+      setDeleteTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setDeleteBusy(false);
+    }
   }
 
   async function generatePacket() {
@@ -101,6 +113,7 @@ export function HandoffStage() {
   }
 
   return (
+    <>
     <StepAssistant
       key={`hand-${refreshKey}`}
       stage={stage}
@@ -162,7 +175,7 @@ export function HandoffStage() {
                       </div>
                     </div>
                     <button
-                      onClick={() => removeRule(r.id)}
+                      onClick={() => setDeleteTarget(r)}
                       className="text-slate-300 hover:text-red-500 p-1"
                       aria-label="Delete"
                     >
@@ -248,5 +261,18 @@ export function HandoffStage() {
         </div>
       }
     />
+    <ConfirmDialog
+      open={deleteTarget !== null}
+      onOpenChange={(open) => {
+        if (!open) setDeleteTarget(null);
+      }}
+      title="Delete handoff rule?"
+      description="Leads matching this rule will stop routing to their current path."
+      confirmLabel="Delete"
+      destructive
+      loading={deleteBusy}
+      onConfirm={confirmDelete}
+    />
+    </>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Eye, EyeOff, Loader2, RotateCcw, Save, TestTube2 } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
+import { ConfirmDialog, LoadingBlock, toast } from '../components/ui';
 import { api } from '../api/client';
 
 interface ProviderField {
@@ -56,6 +57,8 @@ export function IntegrationsPage() {
   const [settings, setSettings] = useState<Record<string, ProviderSettings> | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -97,9 +100,7 @@ export function IntegrationsPage() {
       )}
 
       {!catalog || !settings || !grouped ? (
-        <div className="text-slate-400 flex items-center gap-2">
-          <Loader2 size={16} className="animate-spin" /> Loading…
-        </div>
+        <LoadingBlock label="Loading integrations…" />
       ) : (
         <div className="flex gap-6">
           <nav className="w-56 flex-shrink-0 space-y-6">
@@ -142,22 +143,37 @@ export function IntegrationsPage() {
                 onSaved={(updated) =>
                   setSettings((prev) => ({ ...(prev ?? {}), [updated.providerKey]: updated }))
                 }
-                onReset={async () => {
-                  if (
-                    !confirm(
-                      `Remove all org-level settings for ${activeDef.name}? Environment defaults will apply.`,
-                    )
-                  )
-                    return;
-                  await api.delete(`/admin/providers/${activeDef.key}`);
-                  const refreshed = await api.get<ProviderSettings[]>('/admin/providers');
-                  setSettings(Object.fromEntries(refreshed.map((s) => [s.providerKey, s])));
-                }}
+                onReset={() => setResetConfirmOpen(true)}
               />
             )}
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        onOpenChange={(open) => !resetBusy && setResetConfirmOpen(open)}
+        title={activeDef ? `Reset ${activeDef.name} settings?` : 'Reset settings?'}
+        description="This removes all org-level settings for this provider. Environment defaults will apply instead."
+        confirmLabel="Reset"
+        destructive
+        loading={resetBusy}
+        onConfirm={async () => {
+          if (!activeDef) return;
+          setResetBusy(true);
+          try {
+            await api.delete(`/admin/providers/${activeDef.key}`);
+            const refreshed = await api.get<ProviderSettings[]>('/admin/providers');
+            setSettings(Object.fromEntries(refreshed.map((s) => [s.providerKey, s])));
+            toast.success(`${activeDef.name} reset to defaults`);
+            setResetConfirmOpen(false);
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Reset failed');
+          } finally {
+            setResetBusy(false);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -205,8 +221,9 @@ function ProviderCard({ definition, settings, onSaved, onReset }: ProviderCardPr
       });
       onSaved(updated);
       setSavedAt(Date.now());
+      toast.success(`${definition.name} settings saved`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Save failed');
+      toast.error(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
     }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plug, Check, AlertTriangle, ArrowRight, Unplug } from 'lucide-react';
 import { api } from '../../../api/client';
+import { ConfirmDialog, toast } from '../../../components/ui';
 
 type ProviderKey = 'hubspot' | 'salesforce' | 'pipedrive';
 
@@ -52,6 +53,8 @@ export function CrmWizard() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [openConnId, setOpenConnId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [disconnectTarget, setDisconnectTarget] = useState<string | null>(null);
+  const [disconnectBusy, setDisconnectBusy] = useState(false);
 
   useEffect(() => {
     void api.get<ProviderInfo[]>('/crm/providers').then(setProviders).catch(() => setProviders([]));
@@ -80,17 +83,26 @@ export function CrmWizard() {
       // Open a popup to perform the consent flow.
       const w = window.open(r.authorizeUrl, 'crm_oauth', 'width=600,height=720');
       if (!w) {
-        alert('Please allow popups and try again.');
+        toast.error('Please allow popups and try again.');
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to start OAuth');
+      toast.error(err instanceof Error ? err.message : 'Failed to start OAuth');
     }
   }
 
-  async function disconnect(id: string) {
-    if (!confirm('Disconnect this CRM? Saved field mappings will remain.')) return;
-    await api.post(`/crm/connections/${id}/disconnect`, {});
-    setRefreshKey((k) => k + 1);
+  async function submitDisconnect() {
+    if (!disconnectTarget) return;
+    setDisconnectBusy(true);
+    try {
+      await api.post(`/crm/connections/${disconnectTarget}/disconnect`, {});
+      toast.success('CRM disconnected');
+      setDisconnectTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Disconnect failed');
+    } finally {
+      setDisconnectBusy(false);
+    }
   }
 
   return (
@@ -146,7 +158,7 @@ export function CrmWizard() {
                     </button>
                     <button
                       className="btn-ghost text-xs text-red-600"
-                      onClick={() => disconnect(conn.id)}
+                      onClick={() => setDisconnectTarget(conn.id)}
                       aria-label="Disconnect"
                     >
                       <Unplug size={14} />
@@ -176,6 +188,18 @@ export function CrmWizard() {
           onSaved={() => setRefreshKey((k) => k + 1)}
         />
       )}
+      <ConfirmDialog
+        open={disconnectTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDisconnectTarget(null);
+        }}
+        title="Disconnect this CRM?"
+        description="Saved field mappings will remain and can be reused if you reconnect later."
+        confirmLabel="Disconnect"
+        destructive
+        loading={disconnectBusy}
+        onConfirm={submitDisconnect}
+      />
     </div>
   );
 }

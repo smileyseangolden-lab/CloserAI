@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { ArrowRight, AlertTriangle, Circle, Mail, Target, TrendingDown, TrendingUp, Users } from 'lucide-react';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
+import { LoadingBlock, Skeleton } from '../components/ui';
 import { STAGES, STAGE_BY_ID } from '../workflow/stages';
 
 interface DashboardData {
@@ -224,7 +225,7 @@ export function DashboardPage() {
         </div>
 
         {stagesData === null ? (
-          <div className="text-sm text-slate-400 py-12 text-center">Loading...</div>
+          <LoadingBlock label="Loading agent performance…" />
         ) : stagesData.agents.length === 0 ? (
           <div className="text-sm text-slate-500 py-10 text-center">
             No agents configured yet.{' '}

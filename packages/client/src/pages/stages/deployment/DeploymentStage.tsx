@@ -4,6 +4,7 @@ import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
 import { CrmWizard } from './CrmWizard';
+import { ConfirmDialog, PromptDialog, toast } from '../../../components/ui';
 
 interface DeploymentRow {
   id: string;
@@ -40,6 +41,9 @@ export function DeploymentStage() {
   const [deployments, setDeployments] = useState<DeploymentRow[]>([]);
   const [rules, setRules] = useState<ComplianceRow[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [killTarget, setKillTarget] = useState<DeploymentRow | null>(null);
+  const [resumeTarget, setResumeTarget] = useState<DeploymentRow | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
 
   useEffect(() => {
     void Promise.all([
@@ -53,19 +57,40 @@ export function DeploymentStage() {
       .catch(() => undefined);
   }, [refreshKey]);
 
-  async function kill(id: string) {
-    const reason = prompt('Reason for activating the kill switch?') ?? 'manual';
-    await api.post(`/deployments/${id}/kill`, { reason });
-    setRefreshKey((k) => k + 1);
+  async function submitKill(reason: string) {
+    if (!killTarget) return;
+    setActionBusy(true);
+    try {
+      await api.post(`/deployments/${killTarget.id}/kill`, {
+        reason: reason.trim() || 'manual',
+      });
+      toast.success(`Kill switch activated on ${killTarget.name}`);
+      setKillTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not activate kill switch');
+    } finally {
+      setActionBusy(false);
+    }
   }
 
-  async function resume(id: string) {
-    if (!confirm('Resume this deployment? It will go live immediately.')) return;
-    await api.post(`/deployments/${id}/resume`, {});
-    setRefreshKey((k) => k + 1);
+  async function submitResume() {
+    if (!resumeTarget) return;
+    setActionBusy(true);
+    try {
+      await api.post(`/deployments/${resumeTarget.id}/resume`, {});
+      toast.success(`${resumeTarget.name} is live`);
+      setResumeTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Resume failed');
+    } finally {
+      setActionBusy(false);
+    }
   }
 
   return (
+    <>
     <StepAssistant
       key={`dep-${refreshKey}`}
       stage={stage}
@@ -142,13 +167,13 @@ export function DeploymentStage() {
                   )}
                   <div className="flex gap-2 mt-3">
                     {d.status === 'paused' || d.killSwitchActivatedAt ? (
-                      <button className="btn-secondary" onClick={() => resume(d.id)}>
+                      <button className="btn-secondary" onClick={() => setResumeTarget(d)}>
                         <Play size={12} /> Resume
                       </button>
                     ) : (
                       <button
                         className="btn-secondary text-red-600 hover:bg-red-50"
-                        onClick={() => kill(d.id)}
+                        onClick={() => setKillTarget(d)}
                       >
                         <Pause size={12} /> Kill switch
                       </button>
@@ -192,6 +217,46 @@ export function DeploymentStage() {
         </div>
       }
     />
+    <PromptDialog
+      open={killTarget !== null}
+      onOpenChange={(open) => {
+        if (!open) setKillTarget(null);
+      }}
+      title="Activate kill switch?"
+      description={
+        killTarget ? (
+          <>
+            This halts all outbound for <strong>{killTarget.name}</strong>. Leave a reason
+            for the audit log.
+          </>
+        ) : null
+      }
+      label="Reason"
+      placeholder="e.g. deliverability issue, compliance review…"
+      confirmLabel="Activate kill switch"
+      destructive
+      loading={actionBusy}
+      onConfirm={submitKill}
+    />
+    <ConfirmDialog
+      open={resumeTarget !== null}
+      onOpenChange={(open) => {
+        if (!open) setResumeTarget(null);
+      }}
+      title="Resume deployment?"
+      description={
+        resumeTarget ? (
+          <>
+            <strong>{resumeTarget.name}</strong> will go live immediately and resume outbound
+            activity.
+          </>
+        ) : null
+      }
+      confirmLabel="Resume"
+      loading={actionBusy}
+      onConfirm={submitResume}
+    />
+    </>
   );
 }
 

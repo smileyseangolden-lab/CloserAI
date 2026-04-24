@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
+import { LoadingBlock } from '../components/ui';
 
 interface Knowledge {
   id: string;
@@ -50,7 +51,7 @@ export function AgentDetailPage() {
     }
   }
 
-  if (!agent) return <div className="p-8 text-slate-400">Loading...</div>;
+  if (!agent) return <LoadingBlock label="Loading agent…" className="min-h-[60vh]" />;
 
   return (
     <div className="p-8 max-w-5xl">

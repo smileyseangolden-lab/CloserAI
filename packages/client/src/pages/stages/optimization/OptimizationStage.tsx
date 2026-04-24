@@ -4,6 +4,18 @@ import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
 import { ManagersPanel } from './ManagersPanel';
+import {
+  Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  PromptDialog,
+  toast,
+} from '../../../components/ui';
 
 interface ProposalRow {
   id: string;
@@ -46,6 +58,10 @@ export function OptimizationStage() {
   const [runBusy, setRunBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [tab, setTab] = useState<'proposals' | 'experiments' | 'managers'>('proposals');
+  const [dismissTarget, setDismissTarget] = useState<ProposalRow | null>(null);
+  const [dismissBusy, setDismissBusy] = useState(false);
+  const [stopExpTarget, setStopExpTarget] = useState<ExperimentRow | null>(null);
+  const [stopExpBusy, setStopExpBusy] = useState(false);
 
   useEffect(() => {
     void Promise.all([
@@ -80,30 +96,63 @@ export function OptimizationStage() {
   }
 
   async function approve(id: string) {
-    await api.post(`/optimization/proposals/${id}/approve`, {});
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.post(`/optimization/proposals/${id}/approve`, {});
+      toast.success('Proposal approved');
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Approve failed');
+    }
   }
-  async function dismiss(id: string) {
-    const reason = prompt('Why dismiss?') ?? '';
-    await api.post(`/optimization/proposals/${id}/dismiss`, { reason });
-    setRefreshKey((k) => k + 1);
+  async function submitDismiss(reason: string) {
+    if (!dismissTarget) return;
+    setDismissBusy(true);
+    try {
+      await api.post(`/optimization/proposals/${dismissTarget.id}/dismiss`, {
+        reason: reason.trim(),
+      });
+      toast.success('Proposal dismissed');
+      setDismissTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Dismiss failed');
+    } finally {
+      setDismissBusy(false);
+    }
   }
   async function startExp(id: string) {
-    await api.post(`/optimization/experiments/${id}/start`, {});
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.post(`/optimization/experiments/${id}/start`, {});
+      toast.success('Experiment started');
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not start experiment');
+    }
   }
-  async function stopExp(id: string) {
-    const w = prompt('Winning variant? Enter A, B, or blank.') ?? '';
-    await api.post(`/optimization/experiments/${id}/stop`, {
-      winningVariant: w === 'A' || w === 'B' ? w : undefined,
-    });
-    setRefreshKey((k) => k + 1);
+  async function submitStopExp(winner: 'A' | 'B' | null) {
+    if (!stopExpTarget) return;
+    setStopExpBusy(true);
+    try {
+      await api.post(`/optimization/experiments/${stopExpTarget.id}/stop`, {
+        winningVariant: winner ?? undefined,
+      });
+      toast.success(
+        winner ? `Experiment stopped — variant ${winner} won` : 'Experiment stopped',
+      );
+      setStopExpTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Stop failed');
+    } finally {
+      setStopExpBusy(false);
+    }
   }
 
   const pending = proposals.filter((p) => p.status === 'pending');
   const resolved = proposals.filter((p) => p.status !== 'pending');
 
   return (
+    <>
     <StepAssistant
       key={`opt-${refreshKey}`}
       stage={stage}
@@ -181,7 +230,12 @@ export function OptimizationStage() {
                 </div>
               )}
               {pending.map((p) => (
-                <ProposalCard key={p.id} p={p} onApprove={approve} onDismiss={dismiss} />
+                <ProposalCard
+                  key={p.id}
+                  p={p}
+                  onApprove={approve}
+                  onDismiss={(proposal) => setDismissTarget(proposal)}
+                />
               ))}
               {resolved.length > 0 && (
                 <details className="text-xs">
@@ -253,7 +307,7 @@ export function OptimizationStage() {
                       </button>
                     )}
                     {e.status === 'running' && (
-                      <button className="btn-secondary text-xs" onClick={() => stopExp(e.id)}>
+                      <button className="btn-secondary text-xs" onClick={() => setStopExpTarget(e)}>
                         <StopCircle size={12} /> Stop
                       </button>
                     )}
@@ -265,6 +319,111 @@ export function OptimizationStage() {
         </div>
       }
     />
+    <PromptDialog
+      open={dismissTarget !== null}
+      onOpenChange={(open) => {
+        if (!open) setDismissTarget(null);
+      }}
+      title="Dismiss this proposal?"
+      description={
+        dismissTarget ? (
+          <>
+            We'll hide <strong>{dismissTarget.title}</strong> and log why. The assistant won't
+            re-suggest it unless something changes.
+          </>
+        ) : null
+      }
+      label="Reason (optional)"
+      placeholder="e.g. already tried, not aligned with current ICP…"
+      confirmLabel="Dismiss"
+      loading={dismissBusy}
+      onConfirm={submitDismiss}
+    />
+    <StopExperimentDialog
+      experiment={stopExpTarget}
+      loading={stopExpBusy}
+      onClose={() => setStopExpTarget(null)}
+      onConfirm={submitStopExp}
+    />
+    </>
+  );
+}
+
+function StopExperimentDialog({
+  experiment,
+  loading,
+  onClose,
+  onConfirm,
+}: {
+  experiment: ExperimentRow | null;
+  loading: boolean;
+  onClose: () => void;
+  onConfirm: (winner: 'A' | 'B' | null) => void;
+}) {
+  const [winner, setWinner] = useState<'A' | 'B' | ''>('');
+  useEffect(() => {
+    setWinner('');
+  }, [experiment?.id]);
+  return (
+    <Dialog
+      open={experiment !== null}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Stop experiment</DialogTitle>
+          <DialogDescription>
+            {experiment ? (
+              <>
+                Declare a winner for <strong>{experiment.name}</strong>, or stop without one.
+              </>
+            ) : null}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex gap-2">
+            {(['A', 'B'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setWinner(v)}
+                className={`flex-1 rounded-lg border px-4 py-3 text-sm font-medium transition ${
+                  winner === v
+                    ? 'border-brand-400 bg-brand-50 text-brand-700'
+                    : 'border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                Variant {v} won
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setWinner('')}
+              className={`flex-1 rounded-lg border px-4 py-3 text-sm font-medium transition ${
+                winner === ''
+                  ? 'border-slate-400 bg-slate-50 text-slate-700'
+                  : 'border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              No winner
+            </button>
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => onConfirm(winner === '' ? null : winner)}
+            loading={loading}
+          >
+            Stop experiment
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -275,9 +434,9 @@ function ProposalCard({
 }: {
   p: ProposalRow;
   onApprove: (id: string) => Promise<void>;
-  onDismiss: (id: string) => Promise<void>;
+  onDismiss: (p: ProposalRow) => void;
 }) {
-  const [busy, setBusy] = useState<'approve' | 'dismiss' | null>(null);
+  const [busy, setBusy] = useState<'approve' | null>(null);
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex items-center gap-2 mb-1">
@@ -334,14 +493,7 @@ function ProposalCard({
         <button
           className="btn-secondary"
           disabled={busy !== null}
-          onClick={async () => {
-            setBusy('dismiss');
-            try {
-              await onDismiss(p.id);
-            } finally {
-              setBusy(null);
-            }
-          }}
+          onClick={() => onDismiss(p)}
         >
           <X size={14} /> Dismiss
         </button>

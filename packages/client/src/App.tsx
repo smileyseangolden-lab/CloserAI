@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { useAuthStore } from './stores/auth';
 import { AppLayout } from './components/layout/AppLayout';
+import { LoadingBlock } from './components/ui';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -23,7 +24,7 @@ import { DashboardBuilderPage } from './pages/dashboards/DashboardBuilderPage';
 function RequireAuth({ children }: { children: JSX.Element }) {
   const user = useAuthStore((s) => s.user);
   const loading = useAuthStore((s) => s.loading);
-  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
+  if (loading) return <LoadingBlock label="Checking your session…" className="h-screen" />;
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }

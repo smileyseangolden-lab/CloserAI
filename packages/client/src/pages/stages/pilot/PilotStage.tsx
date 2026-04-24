@@ -3,6 +3,7 @@ import { Play, ShieldCheck, AlertOctagon, ThumbsUp, ThumbsDown } from 'lucide-re
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
+import { PromptDialog, toast } from '../../../components/ui';
 
 interface PilotRunRow {
   id: string;
@@ -40,6 +41,8 @@ export function PilotStage() {
   const [detail, setDetail] = useState<PilotRunDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [killTarget, setKillTarget] = useState<string | null>(null);
+  const [killing, setKilling] = useState(false);
 
   useEffect(() => {
     void api
@@ -81,17 +84,33 @@ export function PilotStage() {
   }
 
   async function approveOrBlock(id: string, goNoGo: 'go' | 'no_go') {
-    await api.post(`/pilot/${id}/approve`, { goNoGo });
-    setRefreshKey((k) => k + 1);
+    try {
+      await api.post(`/pilot/${id}/approve`, { goNoGo });
+      toast.success(goNoGo === 'go' ? 'Pilot approved — Go' : 'Pilot blocked — No-Go');
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update pilot');
+    }
   }
 
-  async function killRun(id: string) {
-    const reason = prompt('Reason for killing this pilot?') ?? 'manual';
-    await api.post(`/pilot/${id}/kill`, { reason });
-    setRefreshKey((k) => k + 1);
+  async function submitKill(reason: string) {
+    if (!killTarget) return;
+    const trimmed = reason.trim() || 'manual';
+    setKilling(true);
+    try {
+      await api.post(`/pilot/${killTarget}/kill`, { reason: trimmed });
+      toast.success('Pilot killed');
+      setKillTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Kill failed');
+    } finally {
+      setKilling(false);
+    }
   }
 
   return (
+    <>
     <StepAssistant
       key={`pilot-${refreshKey}`}
       stage={stage}
@@ -172,7 +191,7 @@ export function PilotStage() {
                   </button>
                   <button
                     className="btn-secondary text-xs text-red-600"
-                    onClick={() => killRun(detail.id)}
+                    onClick={() => setKillTarget(detail.id)}
                     title="Hard kill — blocks the run regardless of verdicts"
                   >
                     <AlertOctagon size={12} />
@@ -211,6 +230,21 @@ export function PilotStage() {
         </div>
       }
     />
+    <PromptDialog
+      open={killTarget !== null}
+      onOpenChange={(open) => {
+        if (!open) setKillTarget(null);
+      }}
+      title="Kill this pilot run?"
+      description="This blocks the run regardless of verdicts. Leave a reason for the audit log."
+      label="Reason"
+      placeholder="e.g. off-brand output, compliance concern…"
+      confirmLabel="Kill run"
+      destructive
+      loading={killing}
+      onConfirm={submitKill}
+    />
+    </>
   );
 }
 

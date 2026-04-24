@@ -3,6 +3,7 @@ import { useParams } from 'react-router';
 import { Play, Pause } from 'lucide-react';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
+import { LoadingBlock } from '../components/ui';
 
 interface CadenceStep {
   id: string;
@@ -41,7 +42,7 @@ export function CampaignDetailPage() {
     setCampaign({ ...campaign, status: updated.status });
   }
 
-  if (!campaign) return <div className="p-8 text-slate-400">Loading...</div>;
+  if (!campaign) return <LoadingBlock label="Loading campaign…" className="min-h-[60vh]" />;
 
   const canStart = campaign.status !== 'active';
 

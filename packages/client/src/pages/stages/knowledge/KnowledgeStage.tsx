@@ -3,6 +3,7 @@ import { BookOpen, FileText, Globe2, Search, Sparkles, Trash2, Upload } from 'lu
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
+import { ConfirmDialog, toast } from '../../../components/ui';
 
 interface KnowledgeRow {
   id: string;
@@ -35,6 +36,9 @@ export function KnowledgeStage() {
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [autoResult, setAutoResult] = useState<{ count: number } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<KnowledgeRow | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [autoConfirmOpen, setAutoConfirmOpen] = useState(false);
 
   useEffect(() => {
     void api
@@ -72,10 +76,19 @@ export function KnowledgeStage() {
     }
   }
 
-  async function remove(id: string) {
-    if (!confirm('Delete this knowledge entry?')) return;
-    await api.delete(`/knowledge/${id}`);
-    setRefreshKey((k) => k + 1);
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    try {
+      await api.delete(`/knowledge/${deleteTarget.id}`);
+      toast.success('Knowledge entry removed');
+      setDeleteTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setDeleteBusy(false);
+    }
   }
 
   async function runSearch() {
@@ -92,30 +105,33 @@ export function KnowledgeStage() {
         filename: file.name,
         base64,
       });
+      toast.success(`${file.name} uploaded`);
       setRefreshKey((k) => k + 1);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Upload failed');
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setBusy(null);
     }
   }
 
-  async function autoGenerate() {
-    if (!confirm('Generate seed battlecards, FAQs, and objection playbooks from your approved profile + value props?')) return;
+  async function confirmAutoGenerate() {
     setBusy('auto');
     setAutoResult(null);
+    setAutoConfirmOpen(false);
     try {
       const r = await api.post<{ count: number }>('/knowledge/auto-generate', {});
       setAutoResult(r);
+      toast.success(`Generated ${r.count} knowledge entries`);
       setRefreshKey((k) => k + 1);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Generation failed');
+      toast.error(err instanceof Error ? err.message : 'Generation failed');
     } finally {
       setBusy(null);
     }
   }
 
   return (
+    <>
     <StepAssistant
       key={`kn-${refreshKey}`}
       stage={stage}
@@ -195,7 +211,7 @@ export function KnowledgeStage() {
               <div>
                 <button
                   className="btn-primary w-full justify-center"
-                  onClick={autoGenerate}
+                  onClick={() => setAutoConfirmOpen(true)}
                   disabled={busy === 'auto'}
                 >
                   <Sparkles size={12} />{' '}
@@ -279,7 +295,7 @@ export function KnowledgeStage() {
                     <div className="text-xs text-slate-500 line-clamp-1">{e.content}</div>
                   </div>
                   <button
-                    onClick={() => remove(e.id)}
+                    onClick={() => setDeleteTarget(e)}
                     className="text-slate-300 hover:text-red-500 p-1"
                     aria-label="Delete"
                   >
@@ -292,6 +308,34 @@ export function KnowledgeStage() {
         </div>
       }
     />
+    <ConfirmDialog
+      open={deleteTarget !== null}
+      onOpenChange={(open) => {
+        if (!open) setDeleteTarget(null);
+      }}
+      title="Delete knowledge entry?"
+      description={
+        deleteTarget ? (
+          <>
+            This will permanently remove <strong>{deleteTarget.title}</strong> from your
+            knowledge base.
+          </>
+        ) : null
+      }
+      confirmLabel="Delete"
+      destructive
+      loading={deleteBusy}
+      onConfirm={confirmDelete}
+    />
+    <ConfirmDialog
+      open={autoConfirmOpen}
+      onOpenChange={setAutoConfirmOpen}
+      title="Auto-generate knowledge?"
+      description="Seeds battlecards, FAQs, and objection playbooks from your approved profile + value props. You can review and edit everything afterwards."
+      confirmLabel="Generate"
+      onConfirm={confirmAutoGenerate}
+    />
+    </>
   );
 }
 

@@ -4,6 +4,7 @@ import { LayoutDashboard, LogOut, Plug, CheckCircle2, Circle, Loader2, AlertOcta
 import { useAuthStore } from '../../stores/auth';
 import { STAGES } from '../../workflow/stages';
 import { api } from '../../api/client';
+import { PromptDialog, toast } from '../ui';
 
 interface WorkspaceStage {
   stageId: string;
@@ -23,6 +24,8 @@ export function AppLayout() {
   const navigate = useNavigate();
   const [stages, setStages] = useState<WorkspaceStage[]>([]);
   const [pause, setPause] = useState<PauseState | null>(null);
+  const [pauseDialogOpen, setPauseDialogOpen] = useState(false);
+  const [pauseSubmitting, setPauseSubmitting] = useState(false);
 
   useEffect(() => {
     void api.get<WorkspaceStage[]>('/workspace').then(setStages).catch(() => setStages([]));
@@ -42,17 +45,30 @@ export function AppLayout() {
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
+  async function submitPause(reason: string | undefined, nextPaused: boolean) {
+    setPauseSubmitting(true);
+    try {
+      const r = await api.patch<PauseState>('/organizations/current/pause-outbound', {
+        paused: nextPaused,
+        reason,
+      });
+      setPause(r);
+      toast.success(nextPaused ? 'Outbound paused' : 'Outbound resumed');
+      setPauseDialogOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update pause state');
+    } finally {
+      setPauseSubmitting(false);
+    }
+  }
+
   async function togglePause() {
     const nextPaused = !(pause?.paused ?? false);
-    const reason =
-      nextPaused
-        ? prompt('Optional reason for pausing all outbound?') ?? undefined
-        : undefined;
-    const r = await api.patch<PauseState>('/organizations/current/pause-outbound', {
-      paused: nextPaused,
-      reason,
-    });
-    setPause(r);
+    if (nextPaused) {
+      setPauseDialogOpen(true);
+      return;
+    }
+    await submitPause(undefined, false);
   }
 
   const statusMap = new Map(stages.map((s) => [s.stageId, s.status]));
@@ -215,6 +231,19 @@ export function AppLayout() {
         )}
         <Outlet />
       </main>
+
+      <PromptDialog
+        open={pauseDialogOpen}
+        onOpenChange={setPauseDialogOpen}
+        title="Pause all outbound"
+        description="This halts every outbound message org-wide until you resume. Leave a reason for your teammates."
+        label="Reason (optional)"
+        placeholder="e.g. holiday freeze, investigating deliverability…"
+        confirmLabel="Pause outbound"
+        destructive
+        loading={pauseSubmitting}
+        onConfirm={(value) => submitPause(value.trim() || undefined, true)}
+      />
     </div>
   );
 }

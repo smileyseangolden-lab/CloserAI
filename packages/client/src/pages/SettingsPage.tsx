@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from 'react-router';
 import { PageHeader } from '../components/ui/PageHeader';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
+import { LoadingBlock } from '../components/ui';
 
 export function SettingsPage() {
   return (
@@ -51,7 +52,7 @@ function OrganizationSettings() {
   useEffect(() => {
     void api.get<typeof org>('/organizations/current').then(setOrg);
   }, []);
-  if (!org) return <div className="text-slate-400">Loading...</div>;
+  if (!org) return <LoadingBlock label="Loading organization settings…" />;
   return (
     <div className="space-y-4">
       <h2 className="font-semibold">Organization</h2>

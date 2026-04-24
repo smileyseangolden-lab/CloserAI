@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
+import { LoadingBlock } from '../components/ui';
 
 interface LeadDetail {
   id: string;
@@ -45,7 +46,7 @@ export function LeadDetailPage() {
     if (lead) setLead({ ...lead, leadScore: result.leadScore });
   }
 
-  if (!lead) return <div className="p-8 text-slate-400">Loading...</div>;
+  if (!lead) return <LoadingBlock label="Loading lead…" className="min-h-[60vh]" />;
 
   return (
     <div className="p-8 max-w-6xl">

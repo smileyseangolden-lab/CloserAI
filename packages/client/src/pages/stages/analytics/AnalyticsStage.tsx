@@ -4,6 +4,7 @@ import { BarChart3, Database, LayoutDashboard, Play, Plus, Save, Trash2 } from '
 import { api } from '../../../api/client';
 import { StepAssistant } from '../../../components/assistant/StepAssistant';
 import { STAGE_BY_ID } from '../../../workflow/stages';
+import { ConfirmDialog, PromptDialog, toast } from '../../../components/ui';
 
 interface SavedQueryRow {
   id: string;
@@ -38,6 +39,13 @@ export function AnalyticsStage() {
   const [saved, setSaved] = useState<SavedQueryRow[]>([]);
   const [dashboards, setDashboards] = useState<DashboardRow[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [createDashOpen, setCreateDashOpen] = useState(false);
+  const [creatingDash, setCreatingDash] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<
+    | { kind: 'dashboard' | 'query'; id: string; name: string }
+    | null
+  >(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     void api
@@ -50,17 +58,43 @@ export function AnalyticsStage() {
       .catch(() => setDashboards([]));
   }, [refreshKey]);
 
-  async function createDashboard() {
-    const name = prompt('Dashboard name?', 'New dashboard');
-    if (!name) return;
-    const r = await api.post<DashboardRow>('/queries/dashboards', { name, layout: [] });
-    window.location.href = `/dashboards/${r.id}`;
+  async function createDashboard(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setCreatingDash(true);
+    try {
+      const r = await api.post<DashboardRow>('/queries/dashboards', {
+        name: trimmed,
+        layout: [],
+      });
+      toast.success('Dashboard created');
+      window.location.href = `/dashboards/${r.id}`;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not create dashboard');
+    } finally {
+      setCreatingDash(false);
+    }
   }
 
-  async function removeDashboard(id: string) {
-    if (!confirm('Delete this dashboard?')) return;
-    await api.delete(`/queries/dashboards/${id}`);
-    setRefreshKey((k) => k + 1);
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const path =
+        deleteTarget.kind === 'dashboard'
+          ? `/queries/dashboards/${deleteTarget.id}`
+          : `/queries/${deleteTarget.id}`;
+      await api.delete(path);
+      toast.success(
+        deleteTarget.kind === 'dashboard' ? 'Dashboard deleted' : 'Saved query deleted',
+      );
+      setDeleteTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function ask() {
@@ -98,13 +132,12 @@ export function AnalyticsStage() {
     }
   }
 
-  async function remove(id: string) {
-    if (!confirm('Delete this saved query?')) return;
-    await api.delete(`/queries/${id}`);
-    setRefreshKey((k) => k + 1);
+  function remove(id: string, name: string) {
+    setDeleteTarget({ kind: 'query', id, name });
   }
 
   return (
+    <>
     <StepAssistant
       stage={stage}
       sidePanel={
@@ -172,7 +205,7 @@ export function AnalyticsStage() {
               <div className="flex items-center gap-2 text-xs font-medium text-slate-500 uppercase tracking-wide">
                 <LayoutDashboard size={12} /> Dashboards · {dashboards.length}
               </div>
-              <button className="btn-secondary text-xs" onClick={createDashboard}>
+              <button className="btn-secondary text-xs" onClick={() => setCreateDashOpen(true)}>
                 <Plus size={12} /> New
               </button>
             </div>
@@ -199,7 +232,9 @@ export function AnalyticsStage() {
                       </span>
                     </Link>
                     <button
-                      onClick={() => removeDashboard(d.id)}
+                      onClick={() =>
+                        setDeleteTarget({ kind: 'dashboard', id: d.id, name: d.name })
+                      }
                       className="text-slate-300 hover:text-red-500 p-1"
                       aria-label="Delete"
                     >
@@ -248,7 +283,7 @@ export function AnalyticsStage() {
                         <Play size={14} />
                       </button>
                       <button
-                        onClick={() => remove(q.id)}
+                        onClick={() => remove(q.id, q.name)}
                         className="text-slate-300 hover:text-red-500 p-1"
                         aria-label="Delete"
                       >
@@ -263,6 +298,41 @@ export function AnalyticsStage() {
         </div>
       }
     />
+    <PromptDialog
+      open={createDashOpen}
+      onOpenChange={setCreateDashOpen}
+      title="New dashboard"
+      description="Give your dashboard a short, descriptive name. You can add widgets after it's created."
+      label="Name"
+      placeholder="Pipeline health"
+      defaultValue="New dashboard"
+      required
+      multiline={false}
+      confirmLabel="Create dashboard"
+      loading={creatingDash}
+      onConfirm={(value) => createDashboard(value)}
+    />
+    <ConfirmDialog
+      open={deleteTarget !== null}
+      onOpenChange={(open) => {
+        if (!open) setDeleteTarget(null);
+      }}
+      title={
+        deleteTarget?.kind === 'dashboard' ? 'Delete dashboard?' : 'Delete saved query?'
+      }
+      description={
+        deleteTarget ? (
+          <>
+            This will permanently remove <strong>{deleteTarget.name}</strong>. This can't be undone.
+          </>
+        ) : null
+      }
+      confirmLabel="Delete"
+      destructive
+      loading={deleting}
+      onConfirm={confirmDelete}
+    />
+    </>
   );
 }
 

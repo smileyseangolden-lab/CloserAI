@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { Plus } from 'lucide-react';
+import { Plus, Megaphone } from 'lucide-react';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
+import { EmptyState, SkeletonCard } from '../components/ui';
 
 interface Campaign {
   id: string;
@@ -25,9 +26,13 @@ const statusColors: Record<string, string> = {
 
 export function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    void api.get<Campaign[]>('/campaigns').then(setCampaigns);
+    void api
+      .get<Campaign[]>('/campaigns')
+      .then(setCampaigns)
+      .finally(() => setLoading(false));
   }, []);
 
   return (
@@ -43,33 +48,49 @@ export function CampaignsPage() {
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {campaigns.map((c) => (
-          <Link
-            to={`/campaigns/${c.id}`}
-            key={c.id}
-            className="card p-5 hover:shadow-md transition"
-          >
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div className="font-semibold text-slate-900">{c.name}</div>
-                <div className="text-xs text-slate-500 mt-0.5 capitalize">
-                  {c.campaignType.replace(/_/g, ' ')} • {c.strategy}
+      {loading ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : campaigns.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            icon={Megaphone}
+            title="No campaigns yet"
+            description="Campaigns bundle your cadence, agents, and target ICP into an orchestrated outbound flow."
+            action={
+              <Link to="/stages/agent_builder" className="btn-primary">
+                <Plus size={16} /> Create a campaign
+              </Link>
+            }
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {campaigns.map((c) => (
+            <Link
+              to={`/campaigns/${c.id}`}
+              key={c.id}
+              className="card p-5 hover:shadow-md transition"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <div className="font-semibold text-slate-900">{c.name}</div>
+                  <div className="text-xs text-slate-500 mt-0.5 capitalize">
+                    {c.campaignType.replace(/_/g, ' ')} • {c.strategy}
+                  </div>
                 </div>
+                <span className={`badge ${statusColors[c.status] ?? 'bg-slate-100'}`}>
+                  {c.status}
+                </span>
               </div>
-              <span className={`badge ${statusColors[c.status] ?? 'bg-slate-100'}`}>
-                {c.status}
-              </span>
-            </div>
-            {c.description && <p className="text-sm text-slate-600">{c.description}</p>}
-          </Link>
-        ))}
-        {campaigns.length === 0 && (
-          <div className="col-span-2 card p-12 text-center text-slate-400">
-            No campaigns yet. Create your first one to start outbound.
-          </div>
-        )}
-      </div>
+              {c.description && <p className="text-sm text-slate-600">{c.description}</p>}
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

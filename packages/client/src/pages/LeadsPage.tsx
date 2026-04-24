@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api } from '../api/client';
 import { PageHeader } from '../components/ui/PageHeader';
-import { Plus } from 'lucide-react';
+import { EmptyState, SkeletonRow } from '../components/ui';
+import { Plus, Users } from 'lucide-react';
 
 interface Lead {
   id: string;
@@ -64,17 +65,21 @@ export function LeadsPage() {
             </tr>
           </thead>
           <tbody>
-            {loading && (
-              <tr>
-                <td className="px-4 py-10 text-center text-slate-400" colSpan={6}>
-                  Loading...
-                </td>
-              </tr>
-            )}
+            {loading &&
+              Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} cols={6} />)}
             {!loading && leads.length === 0 && (
               <tr>
-                <td className="px-4 py-10 text-center text-slate-400" colSpan={6}>
-                  No leads yet.
+                <td colSpan={6}>
+                  <EmptyState
+                    icon={Users}
+                    title="No leads yet"
+                    description="Generate or import leads to start outbound outreach. Your first pass comes from the Data Sources stage."
+                    action={
+                      <Link to="/stages/data_sources" className="btn-primary">
+                        <Plus size={16} /> Generate leads
+                      </Link>
+                    }
+                  />
                 </td>
               </tr>
             )}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { api } from '../api/client';
+import { toast } from '../components/ui';
 
 export function OnboardingPage() {
   const [step, setStep] = useState(1);
@@ -23,7 +24,7 @@ export function OnboardingPage() {
       setAnalysis(result);
       setStep(2);
     } catch (err) {
-      console.error(err);
+      toast.error(err instanceof Error ? err.message : 'Website analysis failed');
     } finally {
       setAnalyzing(false);
     }

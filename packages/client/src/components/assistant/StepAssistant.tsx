@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Send, Sparkles, Check, RotateCcw, User, Bot, Mic, Wand2 } from 'lucide-react';
 import { api } from '../../api/client';
 import type { StageDefinition } from '../../workflow/stages';
+import { ConfirmDialog, toast } from '../ui';
 
 // Minimal Web Speech API shape — not in the default DOM lib types.
 interface SpeechRecognitionLike {
@@ -225,6 +226,8 @@ export function StepAssistant({
   // ---------- Voice input (Web Speech API) ----------
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const [listening, setListening] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
   const voiceSupported =
     typeof window !== 'undefined' &&
     (window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -272,12 +275,16 @@ export function StepAssistant({
   }
 
   async function resetConversation() {
-    if (!confirm('Clear the conversation for this stage?')) return;
+    setResetBusy(true);
     try {
       await api.delete(`/assistant/${stage.id}/history`);
       setMessages([]);
+      toast.success('Conversation cleared');
+      setResetConfirmOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reset');
+      toast.error(err instanceof Error ? err.message : 'Failed to reset');
+    } finally {
+      setResetBusy(false);
     }
   }
 
@@ -305,7 +312,7 @@ export function StepAssistant({
           {headerActions}
           <button
             className="btn-secondary"
-            onClick={resetConversation}
+            onClick={() => setResetConfirmOpen(true)}
             disabled={messages.length === 0}
             title="Clear this stage's conversation"
           >
@@ -338,7 +345,23 @@ export function StepAssistant({
         <section className="flex flex-col min-h-0 border-r border-slate-200 bg-slate-50">
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-6 space-y-4">
             {!loaded ? (
-              <div className="text-sm text-slate-400">Loading...</div>
+              <div className="space-y-3">
+                <div className="flex gap-3">
+                  <div className="h-8 w-8 rounded-full bg-slate-200/70 animate-pulse" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-20 rounded bg-slate-200/70 animate-pulse" />
+                    <div className="h-3 w-3/4 rounded bg-slate-200/70 animate-pulse" />
+                    <div className="h-3 w-2/3 rounded bg-slate-200/70 animate-pulse" />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <div className="h-8 w-8 rounded-full bg-slate-200/70 animate-pulse" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-16 rounded bg-slate-200/70 animate-pulse" />
+                    <div className="h-3 w-5/6 rounded bg-slate-200/70 animate-pulse" />
+                  </div>
+                </div>
+              </div>
             ) : messages.length === 0 ? (
               <OpeningCard stage={stage} />
             ) : (
@@ -441,6 +464,16 @@ export function StepAssistant({
           </div>
         </section>
       </div>
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        onOpenChange={(open) => !resetBusy && setResetConfirmOpen(open)}
+        title="Clear this conversation?"
+        description="The assistant loses its memory for this stage. Your saved drafts and approved data are unaffected."
+        confirmLabel="Clear"
+        destructive
+        loading={resetBusy}
+        onConfirm={resetConversation}
+      />
     </div>
   );
 }
